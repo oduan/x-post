@@ -122,9 +122,18 @@ for (const size of [16, 32, 48, 128]) {
 }
 
 // 应用图标：electron-builder 用它自动生成 ico/icns（要求 ≥512px）
+// electron-app/icons/ 打进 asar 供托盘/窗口图标使用（打包后 __dirname 直连，不能用 ../extension）
 const appIconDir = path.join(__dirname, '..', 'electron-app', 'build');
 fs.mkdirSync(appIconDir, { recursive: true });
 const appIcon = path.join(appIconDir, 'icon.png');
 fs.writeFileSync(appIcon, encodePng(1024, render(1024)));
 console.log(`写入 ${appIcon}`);
+
+const appIconsDir = path.join(__dirname, '..', 'electron-app', 'icons');
+fs.mkdirSync(appIconsDir, { recursive: true });
+for (const size of [16, 32, 48, 128, 256]) {
+  const file = path.join(appIconsDir, `icon${size}.png`);
+  fs.writeFileSync(file, encodePng(size, render(size)));
+  console.log(`写入 ${file}`);
+}
 console.log('图标生成完成');

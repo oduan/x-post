@@ -204,9 +204,15 @@ function showMainWindow() {
   mainWindow.focus();
 }
 
+// 应用内图标（icons/ 随 asar 打包，__dirname 在开发/打包两种模式下都指向应用根目录）
+function appIconPath(name) {
+  return path.join(__dirname, 'icons', name);
+}
+
 // 任务栏托盘：右键菜单提供显示/退出，左键点击切换窗口
 function createTray() {
-  const icon = nativeImage.createFromPath(path.join(__dirname, '..', 'extension', 'icons', 'icon32.png'));
+  const icon = nativeImage.createFromPath(appIconPath('icon32.png'));
+  if (icon.isEmpty()) console.error('[x-post] 托盘图标加载失败:', appIconPath('icon32.png'));
   tray = new Tray(icon);
   tray.setToolTip('X-Post · 推文收藏（本地接口运行中）');
   tray.setContextMenu(
@@ -278,7 +284,7 @@ function createWindow() {
       nodeIntegration: false,
       sandbox: true,
     },
-    icon: path.join(__dirname, '..', 'extension', 'icons', 'icon128.png'),
+    icon: appIconPath('icon128.png'),
   });
   if (saved && saved.maximized) mainWindow.maximize();
 

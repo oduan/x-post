@@ -5,13 +5,13 @@ directories:
   output: release
   buildResources: build
 
-# 主进程、预加载、渲染层与托盘图标（extension/icons 被 main.js 引用）；devDependencies 自动排除
+# 主进程、预加载、渲染层与应用内图标（托盘/窗口图标，main.js 用 __dirname 直连）；devDependencies 自动排除
 files:
   - main.js
   - preload.js
   - lib/**
   - renderer/**
-  - extension/icons/**
+  - icons/**
   - package.json
 
 # GitHub Releases：electron-updater 依赖此处生成的 app-update.yml（Windows 自动更新）

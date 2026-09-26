@@ -1,7 +1,7 @@
 {
   "name": "x-post",
   "productName": "X-Post",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "本地推文收藏查看器：接收并按保存顺序展示来自浏览器扩展保存的 X(Twitter) 推文",
   "main": "main.js",
   "scripts": {

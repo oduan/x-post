@@ -69,6 +69,9 @@ main { max-width: 620px; margin: 0 auto; }
 .hint { color: var(--muted); text-align: center; padding: 48px 16px; }
 .hint.error { color: #f4212e; }
 
+/* 无限滚动哨兵：位于列表末尾，进入预加载区即拉取下一页 */
+#page-sentinel { min-height: 1px; }
+
 .empty { color: var(--muted); padding: 48px 24px; text-align: center; }
 .empty-title { color: var(--fg); font-size: 20px; font-weight: 700; margin-bottom: 16px; }
 .empty ol { text-align: left; display: inline-block; margin: 0 auto 12px; padding-left: 20px; line-height: 1.9; }
@@ -80,6 +83,8 @@ main { max-width: 620px; margin: 0 auto; }
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
   cursor: default;
+  /* 注意：不要给卡片加 content-visibility:auto——卡片插入瞬间其内部
+     clientWidth/offsetLeft 读到 0，媒体条带宽度计算会全部失效 */
 }
 
 .avatar {

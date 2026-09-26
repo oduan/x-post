@@ -1,6 +1,7 @@
 'use strict';
 
 const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, dialog, shell, screen } = require('electron');
+const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
 
@@ -15,10 +16,19 @@ let tray = null;
 let isQuitting = false;
 let closeTipShown = false;
 
-function notifyChanged() {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('tweets:changed');
+// 数据变化通知渲染端：携带变更本身（新增/更新的完整记录、删除的 id），
+// 渲染端做增量插卡/更新，不再整表重拉
+function notifyChanged(event, data) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  let payload;
+  if (event === 'upsert' && data && data.id) {
+    payload = { event, tweet: resolveTweetForRenderer(data) };
+  } else if (event === 'delete') {
+    payload = { event, id: String(data) };
+  } else {
+    payload = { event: 'reload' };
   }
+  mainWindow.webContents.send('tweets:changed', payload);
 }
 
 function resolveTweetForRenderer(t) {
@@ -35,11 +45,21 @@ function resolveTweetForRenderer(t) {
 }
 
 function registerIpc() {
-  ipcMain.handle('tweets:list', async () => (await store.list()).map(resolveTweetForRenderer));
+  ipcMain.handle('tweets:page', (e, q) => {
+    const r = store.page(q || {});
+    return { ...r, items: r.items.map(resolveTweetForRenderer) };
+  });
+
+  ipcMain.handle('tweets:count', (e, q) => store.count(q || {}));
 
   ipcMain.handle('tweets:delete', (e, id) => store.deleteTweet(String(id)));
 
-  ipcMain.handle('config:get', () => ({ ...config, configPath: CONFIG_PATH, defaultPort: DEFAULT_PORT }));
+  ipcMain.handle('config:get', () => ({
+    ...config,
+    configPath: CONFIG_PATH,
+    defaultPort: DEFAULT_PORT,
+    dbFile: store ? store.dbPath : path.join(config.dataDir, 'xpost.db'),
+  }));
 
   ipcMain.handle('config:chooseDir', async () => {
     const r = await dialog.showOpenDialog(mainWindow, {
@@ -49,9 +69,12 @@ function registerIpc() {
     if (r.canceled || !r.filePaths || !r.filePaths.length) return null;
     config.dataDir = r.filePaths[0];
     saveConfig(config);
-    store = createTweetStore(config.dataDir, notifyChanged);
-    await store.ensureDirs().catch((e) => console.error('[x-post] 创建数据目录失败:', e));
-    notifyChanged();
+    if (store) store.close();
+    store = await createTweetStore(config.dataDir, notifyChanged).catch((e) => {
+      console.error('[x-post] 创建数据目录失败:', e);
+      return null;
+    });
+    notifyChanged('reload');
     return { ...config, configPath: CONFIG_PATH };
   });
 
@@ -177,10 +200,23 @@ function createWindow() {
   });
 
   // 开发自检模式：XPOST_SMOKE=1 electron . 启动后 6 秒自动退出并输出 SMOKE_OK
+  // （部分环境下 GUI 进程的 stdout 捕获不到，结果同时写入 electron-app/xpost-smoke-ok.txt）
   mainWindow.webContents.once('did-finish-load', () => {
     if (process.env.XPOST_SMOKE) {
       setTimeout(() => {
-        console.log('SMOKE_OK');
+        let line = 'SMOKE_OK';
+        try {
+          const p = store.page({ view: 'timeline', limit: 1 });
+          line += ` total=${p.total} firstPage=${p.items.length}`;
+        } catch (e) {
+          line += ` STORE_FAIL ${e && e.message}`;
+        }
+        try {
+          fs.writeFileSync(path.join(__dirname, 'xpost-smoke-ok.txt'), line + '\n', 'utf8');
+        } catch (e) {
+          /* ignore */
+        }
+        console.log(line);
         app.quit();
       }, 6000);
     }
@@ -195,14 +231,20 @@ if (!gotLock) {
 
   app.on('before-quit', () => {
     isQuitting = true;
+    if (store) store.close(); // 关闭数据库，checkpoint WAL
   });
 
   app.on('window-all-closed', () => app.quit());
 
   app.whenReady().then(async () => {
     config = loadConfig();
-    store = createTweetStore(config.dataDir, notifyChanged);
-    await store.ensureDirs().catch((e) => console.error('[x-post] 创建数据目录失败:', e));
+    store = await createTweetStore(config.dataDir, notifyChanged).catch(async (e) => {
+      console.error('[x-post] 初始化推文数据库失败:', e);
+      await dialog.showErrorBox('X-Post 启动错误', '推文数据库初始化失败：\n' + ((e && e.message) || e));
+      app.quit();
+      return null;
+    });
+    if (!store) return;
 
     const server = startServer(
       config.port,

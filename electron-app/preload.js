@@ -3,13 +3,16 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('xpost', {
-  listTweets: () => ipcRenderer.invoke('tweets:list'),
+  // 分页读取：{view:'timeline'|'user', userId?, cursor?, limit?} → {items, nextCursor, total}
+  pageTweets: (q) => ipcRenderer.invoke('tweets:page', q),
+  countTweets: (q) => ipcRenderer.invoke('tweets:count', q),
   deleteTweet: (id) => ipcRenderer.invoke('tweets:delete', id),
   getConfig: () => ipcRenderer.invoke('config:get'),
   chooseDataDir: () => ipcRenderer.invoke('config:chooseDir'),
   openDataDir: () => ipcRenderer.invoke('data:openDir'),
   openExternal: (url) => ipcRenderer.invoke('sys:openExternal', url),
+  // 数据增量变化：{event:'upsert', tweet} | {event:'delete', id} | {event:'reload'}
   onChanged: (cb) => {
-    ipcRenderer.on('tweets:changed', () => cb());
+    ipcRenderer.on('tweets:changed', (_e, payload) => cb(payload));
   },
 });

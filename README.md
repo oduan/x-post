@@ -65,46 +65,32 @@ npm start
 - **右键托盘图标**：菜单提供「显示主窗口」和「退出」，点「退出」才会真正结束进程
 - 再次启动应用不会开新窗口，而是唤出已运行实例的主窗口
 
-## 数据存储（纯文本，无数据库）
+## 数据存储（SQLite + 媒体文件）
 
 所有数据保存在可配置的数据目录（默认 `~/x-post-data`）：
 
 ```
 x-post-data/
-├── tweets/                     # 每条推文一个 JSON 元信息文件
-│   └── 1234567890123456789.json
+├── xpost.db                    # 推文元信息数据库（SQLite，WAL 模式；另有 -wal/-shm 伴生文件）
 ├── media/
 │   ├── images/                 # 推文图片（原始 jpg/png/webp）
 │   ├── videos/                 # 推文视频（mp4）
 │   └── avatars/                # 用户头像（按 handle 命名）
+└── tweets.bak-<时间>/          # 旧版逐条 JSON 存档导入数据库后的改名备份（若有）
 ```
 
-推文 JSON 示例：
+推文元信息存于 `xpost.db` 的 `tweets` 表（引用推文与媒体数组以 JSON 列存储），媒体项的数据结构与
+旧版 JSON 存档一致：
 
 ```json
-{
-  "id": "1234567890123456789",
-  "url": "https://x.com/test_user/status/1234567890123456789",
-  "userName": "显示昵称",
-  "userId": "test_user",
-  "avatar": "media/avatars/test_user.jpg",
-  "title": "",
-  "content": "推文正文……",
-  "tweetTime": "2026-09-20T00:00:00.000Z",
-  "savedAt": "2026-09-26T10:00:00.000Z",
-  "quotedTweet": null,
-  "media": [
-    { "kind": "image", "url": "https://pbs.twimg.com/media/xxx?format=jpg&name=orig",
-      "path": "media/images/1234567890123456789-1.jpg", "width": 1200, "height": 800 },
-    { "kind": "video", "url": "https://video.twimg.com/xxx.mp4",
-      "path": "media/videos/1234567890123456789-2.mp4",
-      "poster": "https://pbs.twimg.com/xxx", "posterPath": "media/images/1234567890123456789-2-poster.jpg",
-      "duration": 12.3 }
-  ]
-}
+{ "kind": "image", "url": "https://pbs.twimg.com/media/xxx?format=jpg&name=orig",
+  "path": "media/images/1234567890123456789-1.jpg", "width": 1200, "height": 800 }
 ```
 
-- `savedAt` 决定时间线排序（保存顺序，新的在前）
+- `saved_at` 决定时间线排序（保存顺序，新的在前），建有索引；用户视图按 `user_id + 发帖时间` 索引
+- 界面按 50 条一页从数据库 keyset 游标分页读取（无限滚动），新增/删除推文以增量事件更新界面，
+  不再全量重拉
+- 旧版本 `tweets/*.json` 存档在首次启动时自动导入数据库，原目录改名为 `tweets.bak-<时间>` 保留
 - 媒体字段同时保留原始 URL 与本地相对路径 `path`；下载失败时 `path` 为 `null`，界面回退显示远程地址
 
 ## 配置文件
@@ -157,10 +143,10 @@ x-post-data/
 
 ```bash
 node tools/make-icons.js     # 重新生成扩展图标
-node tools/test-store.js     # 存储与接口的离线集成测试（不需要 Electron）
+node tools/test-store.js     # 存储与接口的离线集成测试（自动切换到 Electron 运行时执行）
 
 cd electron-app
-XPOST_SMOKE=1 npx electron . # 冒烟测试：启动 6 秒后自动退出并输出 SMOKE_OK
+XPOST_SMOKE=1 npx electron . # 冒烟测试：启动 6 秒后自动退出，结果写入 xpost-smoke-ok.txt 并输出 SMOKE_OK
 ```
 
 ### 项目结构
@@ -173,7 +159,7 @@ x-post/
 │   ├── lib/
 │   │   ├── config.js         # ~/.x-post.json 配置读写
 │   │   ├── server.js         # 127.0.0.1:24680 HTTP 接口
-│   │   └── store.js          # 纯文本存储：JSON 元信息 + 媒体下载落盘
+│   │   └── store.js          # SQLite 存储（xpost.db）：元信息 + keyset 分页 + 媒体下载落盘
 │   └── renderer/             # 时间线界面（仿 X 深色样式）
 ├── extension/
 │   ├── manifest.json         # MV3

@@ -55,8 +55,9 @@
     </div>
     <div id="settings-meta" class="meta mono"></div>
     <p class="tip">
-      数据以纯文本保存：tweets/*.json 是每条推文的元信息（含图片/视频的相对路径），
-      media/images、media/videos、media/avatars 分别存放图片、视频与头像，均为原始文件，不使用数据库。
+      推文元信息保存在 SQLite 数据库（xpost.db，WAL 模式）中；
+      media/images、media/videos、media/avatars 分别存放图片、视频与头像，均为原始文件。
+      旧版本保存在 tweets/*.json 的数据会在首次启动时自动导入数据库（原目录改名保留）。
       更改目录不会迁移已有数据。
     </p>
     <div class="row-btns right"><button id="btn-close-settings" class="btn">关闭</button></div>

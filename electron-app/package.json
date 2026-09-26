@@ -1,0 +1,15 @@
+{
+  "name": "x-post",
+  "productName": "X-Post",
+  "version": "1.0.0",
+  "description": "本地推文收藏查看器：接收并按保存顺序展示来自浏览器扩展保存的 X(Twitter) 推文",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "author": "x-post",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^33.2.0"
+  }
+}

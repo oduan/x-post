@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' file: https:; media-src 'self' file: https:; style-src 'self'; script-src 'self'">
+<title>X-Post · 推文收藏</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-title">
+    <button id="btn-back" class="icon-btn" hidden title="返回全部推文">←</button>
+    <span id="view-name">X-Post</span><span id="count" class="topbar-count"></span>
+  </div>
+  <div class="topbar-actions">
+    <button id="btn-refresh" class="icon-btn" title="刷新">↻</button>
+    <button id="btn-folder" class="icon-btn" title="打开数据目录">🗀</button>
+    <button id="btn-settings" class="icon-btn" title="设置">⚙</button>
+  </div>
+</header>
+
+<main>
+  <div id="timeline"></div>
+  <div id="empty" class="empty" hidden>
+    <div class="empty-title">还没有保存的推文</div>
+    <ol>
+      <li>保持本应用（X-Post）处于运行状态</li>
+      <li>在 Chrome 打开某条推文的详情页（x.com/…/status/…）</li>
+      <li>点击浏览器工具栏中的 X-Post 扩展图标</li>
+    </ol>
+    <p>推文会按保存顺序（新的在前）显示在这里，图片与视频会下载并保存在本地数据目录。</p>
+  </div>
+</main>
+
+<div id="lightbox" class="lightbox" hidden>
+  <div id="lb-media" class="lb-media"></div>
+  <div id="lb-count" class="lb-count"></div>
+  <button id="lb-prev" class="lb-btn lb-prev" title="上一个">‹</button>
+  <button id="lb-next" class="lb-btn lb-next" title="下一个">›</button>
+  <button id="lb-close" class="lb-close" title="关闭">✕</button>
+</div>
+
+<div id="settings" class="overlay" hidden>
+  <div class="panel">
+    <h2>设置</h2>
+    <div class="row">
+      <div class="label">数据保存位置</div>
+      <div id="settings-dir" class="value mono"></div>
+      <div class="row-btns">
+        <button id="btn-choose-dir" class="btn primary">更改目录…</button>
+        <button id="btn-open-dir" class="btn">打开目录</button>
+      </div>
+    </div>
+    <div id="settings-meta" class="meta mono"></div>
+    <p class="tip">
+      数据以纯文本保存：tweets/*.json 是每条推文的元信息（含图片/视频的相对路径），
+      media/images、media/videos、media/avatars 分别存放图片、视频与头像，均为原始文件，不使用数据库。
+      更改目录不会迁移已有数据。
+    </p>
+    <div class="row-btns right"><button id="btn-close-settings" class="btn">关闭</button></div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "X-Post · 推文保存",
+  "version": "1.0.0",
+  "description": "在 X(Twitter) 推文详情页一键保存推文（用户名、ID、正文、图片、视频）到本地 X-Post 桌面应用。",
+  "permissions": ["activeTab", "scripting"],
+  "host_permissions": ["http://127.0.0.1:24680/*", "https://*.twimg.com/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://x.com/*", "https://twitter.com/*"],
+      "js": ["inject.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://x.com/*", "https://twitter.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "保存这条推文到 X-Post"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

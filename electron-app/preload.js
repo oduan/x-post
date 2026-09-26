@@ -5,7 +5,6 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('xpost', {
   // 分页读取：{view:'timeline'|'user', userId?, cursor?, limit?} → {items, nextCursor, total}
   pageTweets: (q) => ipcRenderer.invoke('tweets:page', q),
-  countTweets: (q) => ipcRenderer.invoke('tweets:count', q),
   deleteTweet: (id) => ipcRenderer.invoke('tweets:delete', id),
   getConfig: () => ipcRenderer.invoke('config:get'),
   chooseDataDir: () => ipcRenderer.invoke('config:chooseDir'),

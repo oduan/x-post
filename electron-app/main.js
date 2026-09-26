@@ -137,12 +137,11 @@ function registerIpc() {
     return { ...r, items: r.items.map(resolveTweetForRenderer) };
   });
 
-  ipcMain.handle('tweets:count', (e, q) => store.count(q || {}));
-
   ipcMain.handle('tweets:delete', (e, id) => store.deleteTweet(String(id)));
 
   ipcMain.handle('config:get', () => ({
     ...config,
+    appVersion: app.getVersion(),
     configPath: CONFIG_PATH,
     defaultPort: DEFAULT_PORT,
     dbFile: store ? store.dbPath : path.join(config.dataDir, 'xpost.db'),

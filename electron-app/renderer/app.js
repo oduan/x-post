@@ -8,10 +8,10 @@ const MAX_USER_CACHES = 12; // 最多保留多少个用户视图的分页缓存�
 
 const els = {
   timeline: document.getElementById('timeline'),
-  count: document.getElementById('count'),
   empty: document.getElementById('empty'),
   settings: document.getElementById('settings'),
   settingsDir: document.getElementById('settings-dir'),
+  settingsVersion: document.getElementById('settings-version'),
   settingsMeta: document.getElementById('settings-meta'),
   btnRefresh: document.getElementById('btn-refresh'),
   btnUpdate: document.getElementById('btn-update'),
@@ -123,14 +123,6 @@ function renderViewTitle() {
     els.btnBack.hidden = true;
     els.viewName.textContent = 'X-Post';
   }
-}
-
-function updateCount() {
-  if (!active) {
-    els.count.textContent = '';
-    return;
-  }
-  els.count.textContent = active.total > 0 || !active.loading ? `${active.total} 条` : '';
 }
 
 // ---------- 卡片渲染 ----------
@@ -300,7 +292,6 @@ function renderView() {
   activeSeq++;
   const seq = activeSeq;
   renderViewTitle();
-  updateCount();
   unwatchVideos(els.timeline); // 即将清空列表：解除视频滚出屏暂停的观察
   els.timeline.innerHTML = '';
   els.empty.hidden = true;
@@ -319,8 +310,6 @@ function renderView() {
   renderItemsChunked(active, seq, () => {
     window.scrollTo(0, active.scrollY || 0);
   });
-  // 顺带刷新该视图的总数（后台可能有增量变化）
-  refreshCount(seq);
 }
 
 function renderItemsChunked(s, seq, done) {
@@ -396,7 +385,6 @@ async function loadPage(s, seq) {
     }
   } finally {
     s.loading = false;
-    updateCount();
     if (s !== active) return;
     if (seq !== activeSeq) {
       // 请求期间视图被刷新/切换过：缓存可能已合并本次结果但 DOM 没渲染，
@@ -416,19 +404,6 @@ async function loadPage(s, seq) {
         if (r.top < window.innerHeight + 800) loadPage(s, seq);
       }
     }
-  }
-}
-
-async function refreshCount(seq) {
-  if (!active) return;
-  try {
-    const total = await api.countTweets({ view: active.view.type, userId: active.view.userId });
-    if (seq === activeSeq && active) {
-      active.total = total;
-      updateCount();
-    }
-  } catch (e) {
-    /* 计数失败不影响列表 */
   }
 }
 
@@ -457,7 +432,6 @@ function applyUpsert(t) {
     const us = viewStates.get('user:' + t.userId);
     if (us) upsertInto(us, t, 'user');
   }
-  updateCount();
 }
 
 function upsertInto(s, t, kind) {
@@ -521,7 +495,6 @@ function applyDelete(id) {
       }
     }
   }
-  updateCount();
 }
 
 api.onChanged((p) => {
@@ -692,6 +665,7 @@ async function renderSettings() {
   const c = await api.getConfig().catch(() => null);
   if (!c) return;
   els.settingsDir.textContent = c.dataDir || '';
+  els.settingsVersion.textContent = c.appVersion ? `v${c.appVersion}` : '';
   els.settingsMeta.textContent = `数据库：${c.dbFile || ''}\n配置文件：${c.configPath}    本地端口：127.0.0.1:${c.port}`;
 }
 

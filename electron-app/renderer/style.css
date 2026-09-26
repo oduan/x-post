@@ -46,7 +46,6 @@ body {
 .topbar-title { display: flex; align-items: center; gap: 4px; font-size: 19px; font-weight: 800; letter-spacing: 0.3px; }
 .topbar-title .icon-btn { font-size: 20px; margin-left: -6px; }
 #view-name { max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.topbar-count { font-size: 13px; font-weight: 400; color: var(--muted); margin-left: 8px; }
 .topbar-actions { display: flex; gap: 6px; }
 .icon-btn {
   width: 34px;

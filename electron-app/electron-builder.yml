@@ -15,10 +15,13 @@ files:
   - package.json
 
 # GitHub Releases：electron-updater 依赖此处生成的 app-update.yml（Windows 自动更新）
+# releaseType: release —— 直接发布/追加到正式 Release；
+# 默认 draft 策略遇到已发布的同名 Release 会跳过上传
 publish:
   provider: github
   owner: oduan
   repo: x-post
+  releaseType: release
 
 win:
   icon: build/icon.png

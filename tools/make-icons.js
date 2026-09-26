@@ -120,4 +120,11 @@ for (const size of [16, 32, 48, 128]) {
   fs.writeFileSync(file, png);
   console.log(`写入 ${file} (${png.length} 字节)`);
 }
+
+// 应用图标：electron-builder 用它自动生成 ico/icns（要求 ≥512px）
+const appIconDir = path.join(__dirname, '..', 'electron-app', 'build');
+fs.mkdirSync(appIconDir, { recursive: true });
+const appIcon = path.join(appIconDir, 'icon.png');
+fs.writeFileSync(appIcon, encodePng(1024, render(1024)));
+console.log(`写入 ${appIcon}`);
 console.log('图标生成完成');

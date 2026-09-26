@@ -23,7 +23,27 @@
                                                                      └────────────────────┘
 ```
 
-## 快速开始
+## 下载安装（普通用户）
+
+到 [GitHub Releases](https://github.com/oduan/x-post/releases) 下载对应平台的最新版本：
+
+| 文件 | 平台 | 说明 |
+| ---- | ---- | ---- |
+| `X-Post-Setup-x.y.z.exe` | Windows | 安装包（NSIS），双击安装，桌面快捷方式自动创建 |
+| `X-Post-x.y.z-arm64.dmg` / `X-Post-x.y.z.dmg` | macOS (Apple Silicon / Intel) | 拖入「应用程序」即可 |
+| `x-post-extension-vx.y.z.zip` | Chrome 扩展 | 解压后以「加载已解压的扩展程序」方式安装 |
+
+**macOS 首次打开**：当前构建未做代码签名，首次打开会被 Gatekeeper 拦截。在应用图标上**右键 → 打开 → 打开**，或在终端执行
+`xattr -dr com.apple.quarantine /Applications/X-Post.app` 后再打开。
+
+**应用内自动更新**：
+
+- 应用会在**启动时**和**每 4 小时**自动检查新版本
+- 发现新版本时顶栏出现蓝色「发现新版本 v1.x.x」按钮：
+  - **Windows**：点击开始下载（按钮显示进度），下载完成后变为「重启更新」，再点击即自动安装并重启
+  - **macOS**：因构建未签名无法自动更新，点击按钮会打开 Releases 页，手动下载 dmg 替换即可
+
+## 快速开始（开发运行）
 
 ### 1. 启动 Electron 应用
 
@@ -139,6 +159,23 @@ x-post-data/
   查看保留区间，选择区间之外的端口（同时修改 `~/.x-post.json` 的 `port` 与
   `extension/background.js` 的 `PORT`），或重启电脑后保留区间通常会变化。
 
+## 发布新版本（维护者）
+
+推送 `v*` 格式的 tag 即可触发 GitHub Actions 自动发布：
+
+```bash
+git tag v1.0.1
+git push origin v1.0.1
+```
+
+流水线（`.github/workflows/release.yml`）会：
+
+1. 从 tag 名提取版本号写入 `electron-app/package.json` 与 `extension/manifest.json`
+2. Windows 上打包 NSIS 安装包（`X-Post-Setup-x.y.z.exe` + electron-updater 的 `latest.yml` 更新元数据）
+3. macOS 上打包 dmg/zip（Apple Silicon + Intel，未签名）
+4. 打包浏览器扩展 zip（版本号随 tag）
+5. 以上产物自动发布到该 tag 对应的 GitHub Release
+
 ## 开发
 
 ```bash
@@ -153,20 +190,24 @@ XPOST_SMOKE=1 npx electron . # 冒烟测试：启动 6 秒后自动退出，结�
 
 ```
 x-post/
+├── .github/workflows/release.yml  # 推送 v* tag 触发：打包三端产物并发 Release
 ├── electron-app/
-│   ├── main.js               # 主进程：窗口、IPC、启动本地服务
+│   ├── main.js               # 主进程：窗口、IPC、本地服务、应用内更新
 │   ├── preload.js            # contextBridge
+│   ├── electron-builder.yml  # 打包配置（NSIS/dmg，GitHub Releases 发布源）
+│   ├── build/icon.png        # 应用图标（1024px，由 make-icons.js 生成）
 │   ├── lib/
 │   │   ├── config.js         # ~/.x-post.json 配置读写
 │   │   ├── server.js         # 127.0.0.1:24680 HTTP 接口
 │   │   └── store.js          # SQLite 存储（xpost.db）：元信息 + keyset 分页 + 媒体下载落盘
-│   └── renderer/             # 时间线界面（仿 X 深色样式）
+│   └── renderer/             # 时间线界面（仿 X 亮色样式）
 ├── extension/
 │   ├── manifest.json         # MV3
 │   ├── background.js         # 图标点击 → 通知页面抓取；负责与本地应用通信
 │   ├── content.js            # 抓取推文信息 + 页面内临时提示
 │   └── inject.js             # 主世界脚本：捕获视频 mp4 直链
 └── tools/
-    ├── make-icons.js
+    ├── make-icons.js         # 生成扩展图标与应用图标（纯 Node，无依赖）
+    ├── set-version.js        # CI 用：把 tag 版本号写入 package.json / manifest.json
     └── test-store.js
 ```

@@ -14,6 +14,7 @@ const els = {
   settingsDir: document.getElementById('settings-dir'),
   settingsMeta: document.getElementById('settings-meta'),
   btnRefresh: document.getElementById('btn-refresh'),
+  btnUpdate: document.getElementById('btn-update'),
   btnFolder: document.getElementById('btn-folder'),
   btnSettings: document.getElementById('btn-settings'),
   btnCloseSettings: document.getElementById('btn-close-settings'),
@@ -707,6 +708,8 @@ function openLightbox(t, index, resumeTime) {
   lb.tweet = t;
   lb.index = Math.max(0, Math.min(t.media.length - 1, index));
   lb.resumeTime = resumeTime > 0 ? resumeTime : 0;
+  lbWheelAcc = 0;
+  document.body.classList.add('lb-open'); // 禁页面滚动并隐藏滚动条（滚轮用于切换媒体）
   lbRender();
   els.lightbox.hidden = false;
 }
@@ -714,6 +717,7 @@ function openLightbox(t, index, resumeTime) {
 function closeLightbox() {
   lb.tweet = null;
   els.lbMedia.innerHTML = '';
+  document.body.classList.remove('lb-open');
   els.lightbox.hidden = true;
 }
 
@@ -785,6 +789,28 @@ els.lightbox.addEventListener('click', (e) => {
   if (e.target === els.lightbox) closeLightbox();
 });
 
+// 查看器打开时禁用了页面滚动：滚轮/触控板上下滚动改为在该推文的媒体间切换
+let lbWheelAcc = 0;
+let lbWheelReset = null;
+els.lightbox.addEventListener(
+  'wheel',
+  (e) => {
+    e.preventDefault();
+    if (!lb.tweet || !lb.tweet.media || lb.tweet.media.length <= 1) return;
+    lbWheelAcc += e.deltaY;
+    clearTimeout(lbWheelReset);
+    lbWheelReset = setTimeout(() => {
+      lbWheelAcc = 0;
+    }, 180);
+    if (Math.abs(lbWheelAcc) >= 50) {
+      const d = lbWheelAcc > 0 ? 1 : -1;
+      lbWheelAcc = 0;
+      lbStep(d);
+    }
+  },
+  { passive: false }
+);
+
 // ---------- 推文右上角 ⋯ 菜单 ----------
 
 let menuEl = null;
@@ -847,6 +873,20 @@ els.btnRefresh.addEventListener('click', refresh);
 els.btnFolder.addEventListener('click', () => api.openDataDir());
 els.btnOpenDir.addEventListener('click', () => api.openDataDir());
 els.btnBack.addEventListener('click', () => setView({ type: 'timeline' }));
+
+// 顶栏更新按钮：发现新版本 → 点击开始下载；下载完成 → 点击重启安装（mac 为打开下载页）
+function renderUpdate(s) {
+  if (!s || s.status === 'idle' || !s.version) {
+    els.btnUpdate.hidden = true;
+    return;
+  }
+  els.btnUpdate.hidden = false;
+  if (s.status === 'downloading') els.btnUpdate.textContent = `下载更新 ${s.progress || 0}%`;
+  else if (s.status === 'downloaded') els.btnUpdate.textContent = `重启更新 v${s.version}`;
+  else els.btnUpdate.textContent = `发现新版本 v${s.version}`;
+}
+els.btnUpdate.addEventListener('click', () => api.updateAction());
+api.onUpdateStatus(renderUpdate);
 
 els.btnSettings.addEventListener('click', () => {
   renderSettings();

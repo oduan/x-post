@@ -63,6 +63,21 @@ body {
 .icon-btn:hover { background: rgba(15, 20, 25, 0.08); }
 .icon-btn svg { width: 18px; height: 18px; display: block; }
 
+/* 顶栏「有新版本」按钮 */
+.update-btn {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 9999px;
+  border: none;
+  background: var(--blue);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.update-btn:hover { background: #1a8cd8; }
+
 /* ---------- 时间线 ---------- */
 main { max-width: 620px; margin: 0 auto; }
 
@@ -234,6 +249,9 @@ main { max-width: 620px; margin: 0 auto; }
 .car-dot.active { background: #0f1419; }
 
 /* ---------- 窗口级媒体查看器（深色底更适合看媒体） ---------- */
+/* 查看器打开时禁用页面滚动并隐藏滚动条（滚轮改为切换媒体，见 app.js） */
+body.lb-open { overflow: hidden; }
+
 .lightbox {
   position: fixed;
   inset: 0;

@@ -1,0 +1,45 @@
+# electron-builder 打包配置（CI 由 GitHub Actions 调用：npx electron-builder --win/--mac）
+appId: dev.oduan.xpost
+productName: X-Post
+directories:
+  output: release
+  buildResources: build
+
+# 主进程、预加载、渲染层与托盘图标（extension/icons 被 main.js 引用）；devDependencies 自动排除
+files:
+  - main.js
+  - preload.js
+  - lib/**
+  - renderer/**
+  - extension/icons/**
+  - package.json
+
+# GitHub Releases：electron-updater 依赖此处生成的 app-update.yml（Windows 自动更新）
+publish:
+  provider: github
+  owner: oduan
+  repo: x-post
+
+win:
+  icon: build/icon.png
+  target:
+    - target: nsis
+      arch: [x64]
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  shortcutName: X-Post
+
+mac:
+  icon: build/icon.png
+  category: public.app-category.social-networking
+  # 无签名证书：跳过公证签名（用户首次打开需右键→打开，或去除隔离属性；
+  # 未签名构建无法用 Squirrel 自动更新，客户端会改为打开 Releases 页手动下载）
+  identity: null
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+    - target: zip
+      arch: [arm64, x64]

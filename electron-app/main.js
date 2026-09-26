@@ -8,6 +8,7 @@ const { pathToFileURL } = require('url');
 const { loadConfig, saveConfig, CONFIG_PATH, DEFAULT_PORT } = require('./lib/config');
 const { createTweetStore } = require('./lib/store');
 const { startServer } = require('./lib/server');
+const { autoUpdater } = require('electron-updater');
 
 let mainWindow = null;
 let config = null;
@@ -15,6 +16,92 @@ let store = null;
 let tray = null;
 let isQuitting = false;
 let closeTipShown = false;
+
+// ---------- 应用内更新 ----------
+// Windows：electron-updater + NSIS（GitHub Releases 提供更新元数据），点击按钮下载、完成后自动安装
+// macOS：未签名构建无法自动更新，检测到新版本后按钮跳转 Releases 页手动下载
+const GITHUB_OWNER = 'oduan';
+const GITHUB_REPO = 'x-post';
+const RELEASES_URL = `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
+const UPDATE_CHECK_INTERVAL = 4 * 60 * 60 * 1000; // 每 4 小时定时检查
+
+let updateStatus = 'idle'; // idle | available | downloading | downloaded
+let updateVersion = null;
+let updateProgress = 0;
+
+function newerThan(a, b) {
+  const pa = String(a).split('.').map((x) => parseInt(x, 10) || 0);
+  const pb = String(b).split('.').map((x) => parseInt(x, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d) return d > 0;
+  }
+  return false;
+}
+
+function pushUpdateStatus() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('updater:status', {
+      status: updateStatus,
+      version: updateVersion,
+      progress: updateProgress,
+      platform: process.platform,
+    });
+  }
+}
+
+async function checkForUpdate() {
+  if (!app.isPackaged) return; // 开发模式不检查
+  try {
+    if (process.platform === 'win32') {
+      await autoUpdater.checkForUpdates(); // 结果由事件回调推送
+    } else {
+      const res = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`);
+      if (!res.ok) return;
+      const j = await res.json();
+      const latest = String(j.tag_name || '').replace(/^v/, '');
+      if (latest && newerThan(latest, app.getVersion())) {
+        updateStatus = 'available';
+        updateVersion = latest;
+        pushUpdateStatus();
+      }
+    }
+  } catch (e) {
+    console.error('[x-post] 检查更新失败:', e && e.message);
+  }
+}
+
+function setupAutoUpdater() {
+  if (!app.isPackaged) return;
+  if (process.platform === 'win32') {
+    autoUpdater.autoDownload = false; // 用户点击「发现新版本」按钮后再开始下载
+    autoUpdater.on('update-available', (info) => {
+      updateStatus = 'available';
+      updateVersion = info.version;
+      pushUpdateStatus();
+    });
+    autoUpdater.on('update-not-available', () => {
+      updateStatus = 'idle';
+      updateVersion = null;
+      pushUpdateStatus();
+    });
+    autoUpdater.on('download-progress', (p) => {
+      updateStatus = 'downloading';
+      updateProgress = Math.round(p.percent);
+      pushUpdateStatus();
+    });
+    autoUpdater.on('update-downloaded', (info) => {
+      updateStatus = 'downloaded';
+      updateVersion = info.version;
+      pushUpdateStatus();
+    });
+    autoUpdater.on('error', (e) => {
+      console.error('[x-post] 自动更新出错:', e && e.message);
+    });
+  }
+  setTimeout(checkForUpdate, 5000); // 启动时检查一次
+  setInterval(checkForUpdate, UPDATE_CHECK_INTERVAL);
+}
 
 // 数据变化通知渲染端：携带变更本身（新增/更新的完整记录、删除的 id），
 // 渲染端做增量插卡/更新，不再整表重拉
@@ -84,6 +171,30 @@ function registerIpc() {
     if (typeof url === 'string' && /^https?:\/\//i.test(url)) shell.openExternal(url);
     return null;
   });
+
+  // 更新按钮：下载新版本（win）/ 跳转下载页（mac）/ 重启安装
+  ipcMain.handle('updater:action', () => {
+    if (!app.isPackaged) return null;
+    if (process.platform !== 'win32') {
+      shell.openExternal(RELEASES_URL);
+      return null;
+    }
+    if (updateStatus === 'downloaded') {
+      autoUpdater.quitAndInstall(false, true);
+    } else if (updateStatus === 'available') {
+      updateStatus = 'downloading';
+      updateProgress = 0;
+      pushUpdateStatus();
+      autoUpdater.downloadUpdate().catch((e) => {
+        console.error('[x-post] 下载更新失败:', e && e.message);
+        updateStatus = 'available'; // 失败回到可重试状态
+        pushUpdateStatus();
+      });
+    }
+    return null;
+  });
+
+  ipcMain.handle('updater:check', () => checkForUpdate());
 }
 
 function showMainWindow() {
@@ -202,6 +313,7 @@ function createWindow() {
   // 开发自检模式：XPOST_SMOKE=1 electron . 启动后 6 秒自动退出并输出 SMOKE_OK
   // （部分环境下 GUI 进程的 stdout 捕获不到，结果同时写入 electron-app/xpost-smoke-ok.txt）
   mainWindow.webContents.once('did-finish-load', () => {
+    pushUpdateStatus(); // 窗口（重）加载后同步当前更新状态，恢复顶栏更新按钮
     if (process.env.XPOST_SMOKE) {
       setTimeout(() => {
         let line = 'SMOKE_OK';
@@ -269,5 +381,6 @@ if (!gotLock) {
     registerIpc();
     createWindow();
     createTray();
+    setupAutoUpdater();
   });
 }

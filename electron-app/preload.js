@@ -15,4 +15,9 @@ contextBridge.exposeInMainWorld('xpost', {
   onChanged: (cb) => {
     ipcRenderer.on('tweets:changed', (_e, payload) => cb(payload));
   },
+  // 应用内更新：{status:'idle'|'available'|'downloading'|'downloaded', version, progress, platform}
+  onUpdateStatus: (cb) => {
+    ipcRenderer.on('updater:status', (_e, s) => cb(s));
+  },
+  updateAction: () => ipcRenderer.invoke('updater:action'),
 });

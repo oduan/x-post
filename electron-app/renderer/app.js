@@ -73,10 +73,17 @@ function currentTweets() {
   return state.tweets; // 主进程已按保存时间倒序
 }
 
+// 各视图的滚动位置记忆：从用户主页返回时恢复到进入前的位置
+const scrollPos = new Map();
+function viewKey(v) {
+  return v && v.type === 'user' ? 'user:' + v.userId : 'timeline';
+}
+
 function setView(v) {
+  scrollPos.set(viewKey(view), window.scrollY); // 保存当前视图的位置
   view = v;
   render();
-  window.scrollTo(0, 0);
+  window.scrollTo(0, scrollPos.get(viewKey(v)) || 0); // 恢复目标视图的位置
 }
 
 function renderViewTitle() {

@@ -61,6 +61,7 @@ body {
   place-items: center;
 }
 .icon-btn:hover { background: rgba(15, 20, 25, 0.08); }
+.icon-btn svg { width: 18px; height: 18px; display: block; }
 
 /* ---------- 时间线 ---------- */
 main { max-width: 620px; margin: 0 auto; }

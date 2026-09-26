@@ -9,11 +9,14 @@
 const fs = require('fs');
 const path = require('path');
 
-const version = String(process.argv[2] || '').replace(/^v/, '');
-if (!/^\d+(\.\d+){1,3}(-[\w.-]+)?$/.test(version)) {
-  console.error('无效版本号: ' + version);
+const raw = String(process.argv[2] || '').replace(/^v/, '');
+// 规范化为 MAJOR.MINOR.PATCH（electron-builder 要求完整三段；v0.1 → 0.1.0）
+const m = /^(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:-([\w.-]+))?$/.exec(raw);
+if (!m) {
+  console.error('无效版本号: ' + raw);
   process.exit(1);
 }
+const version = `${m[1]}.${m[2] || 0}.${m[3] || 0}${m[4] ? '-' + m[4] : ''}`;
 const only = process.argv[3] || '';
 
 if (only !== '--extension-only') {

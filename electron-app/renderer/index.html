@@ -9,15 +9,16 @@
 <body>
 <header class="topbar">
   <div class="topbar-title">
+    <button id="btn-home" class="app-logo" title="刷新" aria-label="刷新">
+      <img src="../icons/icon32.png" alt="X-Post">
+    </button>
     <button id="btn-back" class="icon-btn" hidden title="返回全部推文">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
     </button>
-    <span id="view-name">X-Post</span>
+    <span id="view-name"></span>
+    <button id="btn-update" class="update-btn" hidden></button>
   </div>
   <div class="topbar-actions">
-    <button id="btn-update" class="update-btn" hidden></button>
-    <button id="btn-refresh" class="icon-btn" title="刷新">↻</button>
-    <button id="btn-folder" class="icon-btn" title="打开数据目录">🗀</button>
     <button id="btn-settings" class="icon-btn" title="设置">⚙</button>
   </div>
 </header>
@@ -72,13 +73,6 @@
       <div class="label">当前版本</div>
       <div id="settings-version" class="value mono"></div>
     </div>
-    <div id="settings-meta" class="meta mono"></div>
-    <p class="tip">
-      推文元信息保存在 SQLite 数据库（xpost.db，WAL 模式）中；
-      media/images、media/videos、media/avatars 分别存放图片、视频与头像，均为原始文件。
-      旧版本保存在 tweets/*.json 的数据会在首次启动时自动导入数据库（原目录改名保留）。
-      更改目录不会迁移已有数据。
-    </p>
     <div class="row-btns right"><button id="btn-close-settings" class="btn">关闭</button></div>
   </div>
 </div>

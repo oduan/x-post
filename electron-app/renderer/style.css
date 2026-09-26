@@ -37,15 +37,43 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 53px;
-  padding: 0 16px;
+  height: 46px;
+  /* 与下方内容栏对齐：main 限宽 620px 居中，卡片再有 16px 内边距，
+     这里取「居中列 + 16px」让标题/按钮对齐卡片可见内容边缘；窄窗口时退回 16px */
+  padding: 0 max(16px, calc((100% - 620px) / 2 + 16px));
   background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border);
+}
+
+/* 分隔线只画内容栏宽度（与卡片同宽居中），不横贯整窗 */
+.topbar::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: min(620px, calc(100% - 32px));
+  height: 1px;
+  background: var(--border);
 }
 .topbar-title { display: flex; align-items: center; gap: 4px; font-size: 19px; font-weight: 800; letter-spacing: 0.3px; }
 .topbar-title .icon-btn { font-size: 20px; margin-left: -6px; }
 #view-name { max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 应用图标（点击刷新）：代替原「X-Post」文字标题 */
+.app-logo {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  margin-left: -4px; /* 图标自带留白，向内容边缘做光学对齐 */
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.app-logo img { width: 26px; height: 26px; display: block; border-radius: 7px; }
+.app-logo:hover { background: none; }
 .topbar-actions { display: flex; gap: 6px; }
 .icon-btn {
   width: 34px;
@@ -62,9 +90,14 @@ body {
 .icon-btn:hover { background: rgba(15, 20, 25, 0.08); }
 .icon-btn svg { width: 18px; height: 18px; display: block; }
 
-/* 顶栏「有新版本」按钮 */
+/* 设置按钮：无悬浮底色，图标稍大与标题协调 */
+#btn-settings { font-size: 21px; }
+#btn-settings:hover { background: none; }
+
+/* 顶栏「有新版本」按钮（位于标题右侧，紧挨名字） */
 .update-btn {
-  height: 34px;
+  height: 30px;
+  margin-left: 8px;
   padding: 0 14px;
   border-radius: 9999px;
   border: none;
@@ -415,8 +448,6 @@ body.lb-open { overflow: hidden; }
 .btn:hover { background: #f7f9f9; }
 .btn.primary { background: var(--blue); border-color: var(--blue); color: #fff; font-weight: 700; }
 .btn.primary:hover { background: #1a8cd8; }
-.meta { color: var(--muted); margin-top: 14px; }
-.tip { color: var(--muted); font-size: 13px; line-height: 1.6; margin-top: 12px; }
 
 /* ---------- 设置面板：浏览器扩展 ---------- */
 .ext-section { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }

@@ -12,19 +12,17 @@ const els = {
   settings: document.getElementById('settings'),
   settingsDir: document.getElementById('settings-dir'),
   settingsVersion: document.getElementById('settings-version'),
-  settingsMeta: document.getElementById('settings-meta'),
   extDot: document.getElementById('ext-dot'),
   extStatusText: document.getElementById('ext-status-text'),
   extGuide: document.getElementById('ext-guide'),
-  btnRefresh: document.getElementById('btn-refresh'),
   btnUpdate: document.getElementById('btn-update'),
-  btnFolder: document.getElementById('btn-folder'),
   btnSettings: document.getElementById('btn-settings'),
   btnCloseSettings: document.getElementById('btn-close-settings'),
   btnChoose: document.getElementById('btn-choose-dir'),
   btnOpenDir: document.getElementById('btn-open-dir'),
   btnExtDir: document.getElementById('btn-ext-dir'),
   btnExtCopy: document.getElementById('btn-ext-copy'),
+  btnHome: document.getElementById('btn-home'),
   btnBack: document.getElementById('btn-back'),
   viewName: document.getElementById('view-name'),
   lightbox: document.getElementById('lightbox'),
@@ -126,7 +124,7 @@ function renderViewTitle() {
     els.viewName.textContent = view.userName ? `${view.userName}（@${view.userId}）` : `@${view.userId}`;
   } else {
     els.btnBack.hidden = true;
-    els.viewName.textContent = 'X-Post';
+    els.viewName.textContent = ''; // 应用名已由左侧图标代替
   }
 }
 
@@ -672,7 +670,6 @@ async function renderSettings() {
   appVersionStr = c.appVersion || '';
   els.settingsDir.textContent = c.dataDir || '';
   els.settingsVersion.textContent = c.appVersion ? `v${c.appVersion}` : '';
-  els.settingsMeta.textContent = `数据库：${c.dbFile || ''}\n配置文件：${c.configPath}    本地端口：127.0.0.1:${c.port}`;
   renderExtStatus();
 }
 
@@ -874,8 +871,7 @@ function openTweetMenu(btn, id) {
 
 // ---------- 事件 ----------
 
-els.btnRefresh.addEventListener('click', refresh);
-els.btnFolder.addEventListener('click', () => api.openDataDir());
+els.btnHome.addEventListener('click', refresh);
 els.btnOpenDir.addEventListener('click', () => api.openDataDir());
 els.btnBack.addEventListener('click', () => setView({ type: 'timeline' }));
 

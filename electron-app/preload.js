@@ -10,6 +10,10 @@ contextBridge.exposeInMainWorld('xpost', {
   chooseDataDir: () => ipcRenderer.invoke('config:chooseDir'),
   openDataDir: () => ipcRenderer.invoke('data:openDir'),
   openExternal: (url) => ipcRenderer.invoke('sys:openExternal', url),
+  // 浏览器扩展：连接状态（{connected, version, lastSeenAt, dir}）与安装引导辅助
+  getExtensionStatus: () => ipcRenderer.invoke('extension:status'),
+  openExtensionDir: () => ipcRenderer.invoke('extension:openDir'),
+  copyExtensionPath: () => ipcRenderer.invoke('extension:copyPath'),
   // 数据增量变化：{event:'upsert', tweet} | {event:'delete', id} | {event:'reload'}
   onChanged: (cb) => {
     ipcRenderer.on('tweets:changed', (_e, payload) => cb(payload));

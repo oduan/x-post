@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, dialog, shell, screen } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, dialog, shell, screen, clipboard } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
@@ -13,6 +13,7 @@ const { autoUpdater } = require('electron-updater');
 let mainWindow = null;
 let config = null;
 let store = null;
+let server = null; // 本地 HTTP 接口（含 extensionStatus 扩展心跳查询）
 let tray = null;
 let isQuitting = false;
 let closeTipShown = false;
@@ -165,6 +166,25 @@ function registerIpc() {
   });
 
   ipcMain.handle('data:openDir', () => shell.openPath(config.dataDir));
+
+  // ---------- 浏览器扩展 ----------
+  // 扩展目录随应用打包（electron-builder extraResources → resources/extension）；
+  // 开发模式下直接用仓库里的 extension/，这样改扩展代码后重载即生效
+  function extensionDir() {
+    return app.isPackaged ? path.join(process.resourcesPath, 'extension') : path.join(__dirname, '..', 'extension');
+  }
+
+  ipcMain.handle('extension:status', () => ({
+    ...(server ? server.extensionStatus() : { connected: false, version: null, lastSeenAt: null }),
+    dir: extensionDir(),
+  }));
+
+  ipcMain.handle('extension:openDir', () => shell.openPath(extensionDir()));
+
+  ipcMain.handle('extension:copyPath', () => {
+    clipboard.writeText(extensionDir());
+    return null;
+  });
 
   ipcMain.handle('sys:openExternal', (e, url) => {
     if (typeof url === 'string' && /^https?:\/\//i.test(url)) shell.openExternal(url);
@@ -363,11 +383,12 @@ if (!gotLock) {
     });
     if (!store) return;
 
-    const server = startServer(
+    server = startServer(
       config.port,
       (payload) => store.saveTweet(payload),
       (info) => store.uploadMedia(info),
-      (id) => store.existsTweet(id)
+      (id) => store.existsTweet(id),
+      app.getVersion()
     );
     server.on('listening', () => {
       console.log(`[x-post] 本地接口已监听: http://127.0.0.1:${config.port}`);

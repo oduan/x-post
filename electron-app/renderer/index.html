@@ -54,6 +54,20 @@
         <button id="btn-open-dir" class="btn">打开目录</button>
       </div>
     </div>
+    <div class="row ext-section">
+      <div class="label">浏览器扩展</div>
+      <div class="value"><span id="ext-dot" class="ext-dot off"></span><span id="ext-status-text">检查中…</span></div>
+      <ol id="ext-guide" class="ext-guide" hidden>
+        <li>在浏览器地址栏打开扩展管理页 <code>chrome://extensions</code>（Edge 为 <code>edge://extensions</code>）</li>
+        <li>打开页面右上角的「开发者模式」开关</li>
+        <li>点击「加载已解压的扩展程序」，选择本应用的扩展文件夹（可点下方按钮打开或复制路径）</li>
+        <li>装好后扩展会自动连接，这里的「未连接」会变成「已连接」</li>
+      </ol>
+      <div class="row-btns">
+        <button id="btn-ext-copy" class="btn">复制扩展路径</button>
+        <button id="btn-ext-dir" class="btn">打开扩展文件夹</button>
+      </div>
+    </div>
     <div class="row">
       <div class="label">当前版本</div>
       <div id="settings-version" class="value mono"></div>

@@ -15,6 +15,26 @@ chrome.action.onClicked.addListener(async (tab) => {
   chrome.tabs.sendMessage(tab.id, { type: 'XPOST_CAPTURE' }, () => void chrome.runtime.lastError);
 });
 
+// ---------- 心跳 ----------
+// 定期 ping 本地应用，桌面端据此在设置面板显示「扩展已连接」；版本号用于两端不一致提示
+const EXT_VERSION = chrome.runtime.getManifest().version;
+
+async function pingServer() {
+  try {
+    await fetch(`${BASE}/api/ping`, { headers: { 'X-Extension-Version': EXT_VERSION } });
+  } catch (e) {
+    /* 桌面端未运行：心跳失败无影响 */
+  }
+}
+
+// Service Worker 每次被唤醒都在顶层重建闹钟（同名校验，存在则重置周期）；
+// worker 被回收后，闹钟到期会重新唤醒它，保证浏览器运行期间持续心跳
+chrome.alarms.create('xpost-ping', { periodInMinutes: 1 });
+chrome.alarms.onAlarm.addListener((a) => {
+  if (a.name === 'xpost-ping') pingServer();
+});
+pingServer();
+
 // 内容脚本抓取完元信息后：由扩展逐个下载媒体二进制（带进度）上传给本地应用，
 // 全部完成后再提交元信息。进度与结果通过 tabs 消息推给页面上的提示条。
 chrome.runtime.onMessage.addListener((msg, sender) => {

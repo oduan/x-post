@@ -31,7 +31,10 @@
 | ---- | ---- | ---- |
 | `X-Post-Setup-x.y.z.exe` | Windows | 安装包（NSIS），双击安装，桌面快捷方式自动创建 |
 | `X-Post-x.y.z-arm64.dmg` / `X-Post-x.y.z.dmg` | macOS (Apple Silicon / Intel) | 拖入「应用程序」即可 |
-| `x-post-extension-vx.y.z.zip` | Chrome 扩展 | 解压后以「加载已解压的扩展程序」方式安装 |
+
+浏览器扩展已内置在安装包中（不再需要单独下载）：打开 X-Post 的 ⚙ 设置，在「浏览器扩展」中按引导以
+「加载已解压的扩展程序」方式安装，扩展路径可一键复制或直接打开。安装成功后设置面板会显示「已连接」。
+（Releases 中的 `x-post-extension-vx.y.z.zip` 仍会保留，供不装桌面端、只想单独用扩展的场景。）
 
 **macOS 首次打开**：当前构建未做代码签名，首次打开会被 Gatekeeper 拦截。在应用图标上**右键 → 打开 → 打开**，或在终端执行
 `xattr -dr com.apple.quarantine /Applications/X-Post.app` 后再打开。
@@ -60,10 +63,15 @@ npm start
 
 ### 2. 安装 Chrome 扩展
 
+打开 X-Post 的 ⚙ 设置，「浏览器扩展」中有分步引导（未连接时自动展开），点「复制扩展路径」/「打开扩展文件夹」
+拿到路径（开发模式即本项目的 `extension` 目录），然后：
+
 1. 打开 Chrome，访问 `chrome://extensions`
 2. 打开右上角「开发者模式」
-3. 点击「加载已解压的扩展程序」，选择本项目的 `extension` 目录
+3. 点击「加载已解压的扩展程序」，选择该目录
 4. **刷新已打开的 x.com 页面**（视频直链捕获脚本需要随页面加载注入）
+
+装好后设置面板的「浏览器扩展」会显示「已连接（v版本号）」（扩展每分钟向本地接口心跳一次）。
 
 ### 3. 保存推文
 
@@ -134,7 +142,7 @@ x-post-data/
 
 | 方法   | 路径                    | 说明 |
 | ------ | ----------------------- | ---- |
-| GET    | `/api/ping`             | 健康检查 |
+| GET    | `/api/ping`             | 健康检查；扩展每分钟带 `X-Extension-Version` 头 ping 一次作为心跳，应用据此在设置面板显示「扩展已连接」 |
 | GET    | `/api/tweets/exists?id=`| 查询某条推文是否已保存（扩展在下载前先查重） |
 | POST   | `/api/media`            | 上传媒体二进制（请求头 `X-Tweet-Id` / `X-Media-Index` / `X-Media-Role: main\|poster` / `X-Media-Ext`），先存入 `.staging` |
 | POST   | `/api/tweets`           | 提交推文元信息；暂存媒体随之移入正式目录，重复推文 ID 返回 `{ ok: true, duplicate: true }` |
@@ -173,7 +181,7 @@ git push origin v1.0.1
 1. 从 tag 名提取版本号写入 `electron-app/package.json` 与 `extension/manifest.json`
 2. Windows 上打包 NSIS 安装包（`X-Post-Setup-x.y.z.exe` + electron-updater 的 `latest.yml` 更新元数据）
 3. macOS 上打包 dmg/zip（Apple Silicon + Intel，未签名）
-4. 打包浏览器扩展 zip（版本号随 tag）
+4. 打包浏览器扩展 zip（版本号随 tag）；扩展目录同时经 extraResources 打进安装包
 5. 以上产物自动发布到该 tag 对应的 GitHub Release
 
 > 注意：tag 必须是**三段版本号**（`v1.0.1` 这种形式，不能是 `v1.0`）——

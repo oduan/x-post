@@ -13,6 +13,9 @@ const els = {
   settingsDir: document.getElementById('settings-dir'),
   settingsVersion: document.getElementById('settings-version'),
   settingsMeta: document.getElementById('settings-meta'),
+  extDot: document.getElementById('ext-dot'),
+  extStatusText: document.getElementById('ext-status-text'),
+  extGuide: document.getElementById('ext-guide'),
   btnRefresh: document.getElementById('btn-refresh'),
   btnUpdate: document.getElementById('btn-update'),
   btnFolder: document.getElementById('btn-folder'),
@@ -20,6 +23,8 @@ const els = {
   btnCloseSettings: document.getElementById('btn-close-settings'),
   btnChoose: document.getElementById('btn-choose-dir'),
   btnOpenDir: document.getElementById('btn-open-dir'),
+  btnExtDir: document.getElementById('btn-ext-dir'),
+  btnExtCopy: document.getElementById('btn-ext-copy'),
   btnBack: document.getElementById('btn-back'),
   viewName: document.getElementById('view-name'),
   lightbox: document.getElementById('lightbox'),
@@ -664,10 +669,36 @@ window.addEventListener('resize', () => {
 async function renderSettings() {
   const c = await api.getConfig().catch(() => null);
   if (!c) return;
+  appVersionStr = c.appVersion || '';
   els.settingsDir.textContent = c.dataDir || '';
   els.settingsVersion.textContent = c.appVersion ? `v${c.appVersion}` : '';
   els.settingsMeta.textContent = `数据库：${c.dbFile || ''}\n配置文件：${c.configPath}    本地端口：127.0.0.1:${c.port}`;
+  renderExtStatus();
 }
+
+// 扩展连接状态：显示在设置面板，打开期间每 5 秒轮询（扩展每分钟心跳一次）
+let appVersionStr = '';
+
+async function renderExtStatus() {
+  const s = await api.getExtensionStatus().catch(() => null);
+  if (!s) return;
+  if (s.connected) {
+    const mismatch = s.version && appVersionStr && s.version !== appVersionStr;
+    els.extStatusText.textContent = mismatch
+      ? `已连接（扩展 v${s.version}，应用 v${appVersionStr}，建议重新加载扩展更新）`
+      : `已连接（v${s.version || '?'}）`;
+    els.extDot.className = 'ext-dot ' + (mismatch ? 'warn' : 'ok');
+    els.extGuide.hidden = true;
+  } else {
+    els.extStatusText.textContent = '未连接';
+    els.extDot.className = 'ext-dot off';
+    els.extGuide.hidden = false;
+  }
+}
+
+setInterval(() => {
+  if (!els.settings.hidden) renderExtStatus();
+}, 5000);
 
 // ---------- 窗口级媒体查看器（lightbox） ----------
 
@@ -883,6 +914,19 @@ els.btnChoose.addEventListener('click', async () => {
     renderView();
     els.settings.hidden = true;
   }
+});
+
+// 浏览器扩展安装辅助：打开扩展文件夹 / 复制路径（带「已复制」反馈）
+els.btnExtDir.addEventListener('click', () => api.openExtensionDir());
+els.btnExtCopy.addEventListener('click', async () => {
+  await api.copyExtensionPath();
+  const btn = els.btnExtCopy;
+  btn.textContent = '已复制 ✓';
+  btn.disabled = true;
+  setTimeout(() => {
+    btn.textContent = '复制扩展路径';
+    btn.disabled = false;
+  }, 1500);
 });
 
 // 记录 pointerdown 时视频的播放状态，以及视频最近一次播放/暂停切换的时刻，

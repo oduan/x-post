@@ -45,13 +45,28 @@ function str(v) {
   return typeof v === 'string' ? v : '';
 }
 
+// 扩展心跳：扩展每分钟 ping 一次 /api/ping（带 X-Extension-Version 头），
+// 记录最近一次的版本与时间，供设置面板显示「扩展已连接」。
+// TTL 取 5 分钟：告警周期 1 分钟，容忍浏览器休眠/MV3 worker 节流造成的偶发缺口
+const HEARTBEAT_TTL = 5 * 60 * 1000;
+let extHeartbeat = { version: null, at: 0 };
+
+function extensionStatus() {
+  return {
+    connected: !!extHeartbeat.at && Date.now() - extHeartbeat.at < HEARTBEAT_TTL,
+    version: extHeartbeat.version,
+    lastSeenAt: extHeartbeat.at || null,
+  };
+}
+
 /**
  * @param {number} port 监听端口
  * @param {(payload: object) => Promise<{duplicate?: boolean}>} onSaveTweet 收到推文元信息时的回调
  * @param {(info: object) => Promise<void>} onUploadMedia 收到媒体二进制时的回调
  * @param {(id: string) => Promise<boolean>} existsTweet 查询推文是否已存在的回调
+ * @param {string} [appVersion] 应用版本号，心跳响应里返回给扩展侧展示
  */
-function startServer(port, onSaveTweet, onUploadMedia, existsTweet) {
+function startServer(port, onSaveTweet, onUploadMedia, existsTweet, appVersion) {
   const server = http.createServer(async (req, res) => {
     try {
       if (req.method === 'OPTIONS') {
@@ -61,7 +76,10 @@ function startServer(port, onSaveTweet, onUploadMedia, existsTweet) {
       }
       const url = (req.url || '').split('?')[0];
       if (req.method === 'GET' && (url === '/api/ping' || url === '/ping')) {
-        sendJson(res, 200, { ok: true, app: 'x-post' });
+        // 只有带版本头的 ping 才算扩展心跳（无头的视为普通健康检查）
+        const v = str(req.headers['x-extension-version']);
+        if (v) extHeartbeat = { version: v.slice(0, 32), at: Date.now() };
+        sendJson(res, 200, { ok: true, app: 'x-post', version: appVersion || undefined });
         return;
       }
       if (req.method === 'GET' && url === '/api/tweets/exists') {
@@ -106,6 +124,7 @@ function startServer(port, onSaveTweet, onUploadMedia, existsTweet) {
     }
   });
   server.listen(port, '127.0.0.1');
+  server.extensionStatus = extensionStatus; // 供主进程 IPC 查询扩展连接状态
   return server;
 }
 

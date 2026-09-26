@@ -135,6 +135,7 @@ function createWindow() {
     ...(x != null && y != null ? { x, y } : {}),
     minWidth: 720,
     minHeight: 480,
+    fullscreenable: false, // 禁止系统级全屏：视频全屏请求会失败并触发 fullscreenerror，由界面转为窗口内全屏（避免窗口反复切换闪烁）
     backgroundColor: '#ffffff',
     autoHideMenuBar: true,
     webPreferences: {

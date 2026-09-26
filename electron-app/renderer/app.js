@@ -118,13 +118,13 @@ function mediaItemHtml(m, idx) {
     return (
       `<div class="media-item media-video"${dataIdx}>` +
       `<video src="${esc(src)}" ${poster ? `poster="${esc(poster)}"` : ''} preload="metadata"></video>` +
-      `<div class="video-play"><span>▶</span></div></div>`
+      '<div class="video-play"><button class="video-play-btn" title="播放">▶</button></div></div>'
     );
   }
   if (poster) {
     return (
       `<div class="media-item media-video"${dataIdx}><img src="${esc(poster)}" alt="" loading="lazy">` +
-      `<div class="video-play"><span>▶</span></div><span class="miss-note">未捕获到视频直链，已保存封面</span></div>`
+      '<div class="video-play"><span>▶</span></div><span class="miss-note">未捕获到视频直链，已保存封面</span></div>'
     );
   }
   return '';
@@ -210,6 +210,33 @@ function bindStrips() {
           else vid.addEventListener('loadedmetadata', () => apply(vid.videoWidth, vid.videoHeight), { once: true });
         }
       }
+    });
+
+    // 视频播放状态驱动 ▶ 遮罩显隐；播放后显示原生底部控件；控件全屏按钮转为窗口内全屏
+    box.querySelectorAll('.media-item').forEach((item) => {
+      const v = item.querySelector('video');
+      if (!v) return;
+      v.addEventListener('play', () => {
+        lastMediaToggleAt.set(v, performance.now());
+        v.controls = true; // 点击播放后，视频底部出现控件（同全屏样式）
+        item.classList.add('playing');
+      });
+      v.addEventListener('pause', () => {
+        lastMediaToggleAt.set(v, performance.now());
+        item.classList.remove('playing');
+      });
+      v.addEventListener('ended', () => {
+        v.currentTime = 0;
+        item.classList.remove('playing');
+      });
+      // 窗口禁止系统全屏（fullscreenable:false），控件里的全屏按钮触发的是
+      // Chromium 元素全屏：视频直接铺满应用窗口（无窗口切换、不闪烁），
+      // 再点一次即退出回到卡片，均为原生行为，无需拦截。
+      // 只有控件里的全屏按钮能切换全屏，屏蔽双击视频触发的原生全屏
+      v.addEventListener('dblclick', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      });
     });
 
     const saved = carouselState.get(box.dataset.id) || 0;
@@ -330,12 +357,17 @@ function renderSettings() {
 
 // ---------- 窗口级媒体查看器（lightbox） ----------
 
-const lb = { tweet: null, index: 0 };
+const lb = { tweet: null, index: 0, resumeTime: 0 };
 
-function openLightbox(t, index) {
+function openLightbox(t, index, resumeTime) {
   if (!t || !t.media || !t.media.length) return;
+  // 暂停所有原地播放中的视频，避免与全屏播放重叠出声
+  document.querySelectorAll('.media-item video').forEach((v) => {
+    if (!v.paused) v.pause();
+  });
   lb.tweet = t;
   lb.index = Math.max(0, Math.min(t.media.length - 1, index));
+  lb.resumeTime = resumeTime > 0 ? resumeTime : 0;
   lbRender();
   els.lightbox.hidden = false;
 }
@@ -360,6 +392,30 @@ function lbRender() {
       els.lbMedia.innerHTML = `<video src="${esc(src)}" ${
         poster ? `poster="${esc(poster)}"` : ''
       } controls autoplay></video>`;
+      // 原地播放过的视频，全屏从原进度继续
+      const vEl = els.lbMedia.querySelector('video');
+      if (vEl) {
+        // 查看器里点控件的全屏按钮 = 元素全屏铺满窗口（原生行为），再点退出回到查看器
+        // 双击不触发系统全屏
+        vEl.addEventListener('dblclick', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        });
+        if (lb.resumeTime > 0) {
+          const t0 = lb.resumeTime;
+          vEl.addEventListener(
+            'loadedmetadata',
+            () => {
+              try {
+                vEl.currentTime = t0;
+              } catch (e) {
+                /* ignore */
+              }
+            },
+            { once: true }
+          );
+        }
+      }
     } else if (poster) {
       els.lbMedia.innerHTML = `<img src="${esc(poster)}" alt="">`;
     } else {
@@ -472,7 +528,21 @@ els.btnChoose.addEventListener('click', async () => {
   }
 });
 
-// 时间线内的统一点击处理：⋯ 菜单 / 轮播翻页 / 媒体放大 / 跳转用户主页
+// 记录 pointerdown 时视频的播放状态，以及视频最近一次播放/暂停切换的时刻，
+// 用于识别原生控件的播放/暂停点击（见时间线点击处理），避免二次切换
+const pausedAtPointerDown = new WeakMap();
+const lastMediaToggleAt = new WeakMap();
+document.addEventListener(
+  'pointerdown',
+  (e) => {
+    const item = e.target instanceof Element && e.target.closest('.media-item');
+    const v = item && item.querySelector('video');
+    if (v) pausedAtPointerDown.set(v, v.paused);
+  },
+  true
+);
+
+// 时间线内的统一点击处理：⋯ 菜单 / 轮播翻页 / 视频播放暂停 / 图片放大 / 跳转用户主页
 els.timeline.addEventListener('click', (e) => {
   const target = e.target;
   if (!(target instanceof Element)) return;
@@ -498,12 +568,49 @@ els.timeline.addEventListener('click', (e) => {
     return;
   }
 
+  // 点击 ▶ 按钮：原地播放（尺寸不变），不走全屏
+  const playBtn = target.closest('.video-play-btn');
+  if (playBtn) {
+    const item = playBtn.closest('.media-item');
+    const v = item && item.querySelector('video');
+    if (v) {
+      e.stopPropagation();
+      v.play().catch(() => {});
+      return;
+    }
+    // 无视频（仅封面）时继续走点击放大的逻辑
+  }
+
   const item = target.closest('.media-item');
   if (item) {
+    const v = item.querySelector('video');
+    if (v) {
+      // 视频：点击空白处切换播放/暂停（首次点击即开始播放并显示控件）；
+      // 底部原生控件条区域的点击交给控件本身；全屏只通过控件里的全屏按钮
+      // （元素全屏原生行为，见 bindStrips 注释）。
+      const r = v.getBoundingClientRect();
+      const inControlsBar = r.height > 90 && e.clientY > r.bottom - 52;
+      // 按下→抬起期间播放状态若已被原生控件切换（如点了控件里的暂停/播放），
+      // 或本次点击前 200ms 内状态刚被切换过（原生按钮动作与本处理存在时序竞态），
+      // 均不再由这里二次切换，否则会出现「暂停后立刻又播放」
+      const wasPaused = pausedAtPointerDown.get(v);
+      const stateChangedSinceDown = wasPaused !== undefined && wasPaused !== v.paused;
+      const toggledJustNow = performance.now() - (lastMediaToggleAt.get(v) || 0) < 200;
+      if (!inControlsBar && !stateChangedSinceDown && !toggledJustNow) {
+        // 阻止 Chromium 原生「单击带 controls 的视频表面 = 切换播放」的默认行为——
+        // 否则这里暂停后，原生默认动作会立即把它切回播放
+        e.preventDefault();
+        if (v.paused) v.play().catch(() => {});
+        else v.pause();
+      }
+      return;
+    }
     const article = item.closest('.tweet');
     const id = article && article.dataset.id;
     const t = state.tweets.find((x) => x.id === id);
-    if (t && t.media && t.media.length) openLightbox(t, parseInt(item.dataset.idx, 10) || 0);
+    if (t && t.media && t.media.length) {
+      openLightbox(t, parseInt(item.dataset.idx, 10) || 0);
+    }
     return;
   }
 

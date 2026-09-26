@@ -143,15 +143,21 @@ main { max-width: 620px; margin: 0 auto; }
   object-fit: cover;
   display: block;
 }
+/* 元素全屏（控件全屏按钮）：保持宽高比缩放到铺满窗口，不裁切（黑边填充） */
+.media-item video:fullscreen {
+  object-fit: contain;
+  background: #000;
+}
 
-/* 视频封面上的播放按钮（点击进入窗口级全屏播放） */
+/* 视频封面上的播放按钮：点击原地播放（尺寸不变）；点视频其他区域进入全屏 */
 .video-play {
   position: absolute;
   inset: 0;
   display: grid;
   place-items: center;
-  pointer-events: none;
+  pointer-events: none; /* 遮罩本身不拦截点击（透传给媒体区 → 全屏） */
 }
+.video-play-btn,
 .video-play span {
   width: 52px;
   height: 52px;
@@ -163,6 +169,13 @@ main { max-width: 620px; margin: 0 auto; }
   display: grid;
   place-items: center;
 }
+.video-play-btn {
+  pointer-events: auto; /* 只有按钮本身可点（原地播放） */
+  cursor: pointer;
+}
+.video-play-btn:hover { background: rgba(29, 155, 240, 0.85); }
+/* 原地播放中隐藏遮罩，暂停/结束自动恢复（JS 由播放事件驱动） */
+.media-item.playing .video-play { display: none; }
 .miss-note {
   position: absolute;
   left: 10px;

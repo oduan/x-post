@@ -300,6 +300,7 @@ function renderView() {
   const seq = activeSeq;
   renderViewTitle();
   updateCount();
+  unwatchVideos(els.timeline); // 即将清空列表：解除视频滚出屏暂停的观察
   els.timeline.innerHTML = '';
   els.empty.hidden = true;
   if (io && sentinelEl) io.unobserve(sentinelEl);
@@ -493,6 +494,7 @@ function insertCardAt(i, t) {
 function replaceCard(t) {
   const node = els.timeline.querySelector(`.tweet[data-id="${CSS.escape(t.id)}"]`);
   if (!node) return;
+  unwatchVideos(node);
   const fresh = buildCard(t);
   node.replaceWith(fresh);
   bindStripCard(fresh); // 插入 DOM 后再绑（需读真实 clientWidth）
@@ -506,7 +508,10 @@ function applyDelete(id) {
       s.total = Math.max(0, s.total - 1);
       if (s === active) {
         const node = els.timeline.querySelector(`.tweet[data-id="${CSS.escape(id)}"]`);
-        if (node) node.remove();
+        if (node) {
+          unwatchVideos(node);
+          node.remove();
+        }
         if (!s.items.length) {
           s.done = true;
           els.timeline.innerHTML = '';
@@ -528,6 +533,25 @@ api.onChanged((p) => {
 });
 
 // ---------- 媒体条带绑定 ----------
+
+// 正在播放的视频滚出屏幕后自动暂停（完全离开视口即暂停；切换视图销毁卡片时同样触发）。
+// 阈值必须含 0：只用较高阈值时，从「部分可见」滚到「完全出屏」不会产生 isIntersecting=false 的穿越。
+const videoWatcher =
+  'IntersectionObserver' in window
+    ? new IntersectionObserver(
+        (entries) => {
+          for (const en of entries) {
+            if (!en.isIntersecting && en.target && !en.target.paused) en.target.pause();
+          }
+        },
+        { threshold: 0 }
+      )
+    : null;
+
+function unwatchVideos(root) {
+  if (!videoWatcher) return;
+  root.querySelectorAll('video').forEach((v) => videoWatcher.unobserve(v));
+}
 
 // 当前显示的是哪个条带项（最贴近滚动位置的项；各项宽度不同，不能按宽度均分计算）
 function currentStripIdx(track) {
@@ -605,6 +629,7 @@ function bindStripBox(box) {
       v.currentTime = 0;
       item.classList.remove('playing');
     });
+    if (videoWatcher) videoWatcher.observe(v); // 滚出屏幕自动暂停
     // 窗口禁止系统全屏（fullscreenable:false），控件里的全屏按钮触发的是
     // Chromium 元素全屏：视频直接铺满应用窗口（无窗口切换、不闪烁），
     // 再点一次即退出回到卡片，均为原生行为，无需拦截。

@@ -243,11 +243,13 @@ main { max-width: 620px; margin: 0 auto; }
   align-items: center;
   justify-content: center;
 }
-.lb-media { display: grid; place-items: center; max-width: calc(100% - 130px); max-height: calc(100% - 80px); }
+.lb-media { display: grid; place-items: center; }
 .lb-media img,
 .lb-media video {
-  max-width: 100%;
-  max-height: calc(100vh - 80px);
+  /* 铺满窗口：媒体直接顶满受限方向的边缘（按钮悬浮在媒体上方），
+     不再预留边距——避免 4:3/竖图/方图在查看器里出现上下黑边 */
+  max-width: 100vw;
+  max-height: 100vh;
   object-fit: contain;
   border-radius: 4px;
 }

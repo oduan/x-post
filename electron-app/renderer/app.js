@@ -282,8 +282,10 @@ function updateSentinel(s) {
 if ('IntersectionObserver' in window) {
   io = new IntersectionObserver(
     (entries) => {
+      // 必须带上当前 activeSeq：loadPage 以 seq === activeSeq 判定结果是否仍属于当前视图，
+      // 不传（undefined）会被当成「请求期间视图已切换」而只写缓存、不渲染，页面卡在「加载中…」
       if (entries.some((en) => en.isIntersecting) && active && !active.loading && !active.done && !active.rendering) {
-        loadPage(active);
+        loadPage(active, activeSeq);
       }
     },
     { rootMargin: '800px' }

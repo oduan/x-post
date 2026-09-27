@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "X-Post · 推文保存",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "在 X(Twitter) 推文详情页一键保存推文（用户名、ID、正文、图片、视频）到本地 X-Post 桌面应用。",
   "permissions": ["activeTab", "scripting", "alarms"],
   "host_permissions": ["http://127.0.0.1:24680/*", "https://*.twimg.com/*"],

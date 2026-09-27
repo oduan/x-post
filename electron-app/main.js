@@ -132,6 +132,23 @@ function resolveTweetForRenderer(t) {
   };
 }
 
+// ---------- 网络检测 ----------
+// 用 Google 的连通性检测端点（Android 系统联网检测同款，固定返回 204、无响应体）测试能否访问外网；
+// 与媒体兜底下载（lib/store.js downloadTo）同为 Node fetch，不经过系统代理，行为一致
+const NET_CHECK_URL = 'https://www.google.com/generate_204';
+const NET_CHECK_TIMEOUT = 8000;
+
+function netErrText(e) {
+  if (e && e.name === 'AbortError') return '连接超时';
+  const cause = e && e.cause;
+  const code = cause && cause.code;
+  if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') return '域名解析失败';
+  if (code === 'ETIMEDOUT') return '连接超时';
+  if (code === 'ECONNREFUSED') return '连接被拒绝';
+  if (code === 'ECONNRESET') return '连接被重置';
+  return (cause && cause.message) || (e && e.message) || String(e);
+}
+
 function registerIpc() {
   ipcMain.handle('tweets:page', (e, q) => {
     const r = store.page(q || {});
@@ -189,6 +206,22 @@ function registerIpc() {
   ipcMain.handle('sys:openExternal', (e, url) => {
     if (typeof url === 'string' && /^https?:\/\//i.test(url)) shell.openExternal(url);
     return null;
+  });
+
+  // 网络检测：端点正常时只会返回 204，拿到其它状态码说明响应被中间设备篡改
+  ipcMain.handle('net:check', async () => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), NET_CHECK_TIMEOUT);
+    const started = Date.now();
+    try {
+      const res = await fetch(NET_CHECK_URL, { signal: controller.signal });
+      if (res.status !== 204) return { ok: false, error: `HTTP ${res.status}，响应异常` };
+      return { ok: true, latencyMs: Date.now() - started };
+    } catch (e) {
+      return { ok: false, error: netErrText(e) };
+    } finally {
+      clearTimeout(timer);
+    }
   });
 
   // 更新按钮：下载新版本（win）/ 跳转下载页（mac）/ 重启安装

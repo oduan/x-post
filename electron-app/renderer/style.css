@@ -472,6 +472,7 @@ body.lb-open { overflow: hidden; }
 .ext-dot.ok { background: #00ba7c; }
 .ext-dot.off { background: #cfd9de; }
 .ext-dot.warn { background: #ffd400; }
+.ext-dot.err { background: #f4212e; }
 .ext-guide {
   margin: 10px 0 0;
   padding-left: 20px;
@@ -486,3 +487,8 @@ body.lb-open { overflow: hidden; }
   border-radius: 4px;
   padding: 1px 5px;
 }
+
+/* ---------- 设置面板：网络检测 ---------- */
+.net-section { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+/* 检测地址展示行（.mono 之后的字号覆盖） */
+.net-url { margin-top: 6px; color: var(--muted); font-size: 12px; }

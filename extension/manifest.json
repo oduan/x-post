@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "X-Post · 推文/作品保存",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "在 X(Twitter) 推文详情页或抖音作品详情页一键保存内容（作者、正文、图片、视频）到本地 X-Post 桌面应用。",
   "permissions": ["activeTab", "scripting", "alarms"],
   "host_permissions": [

@@ -22,6 +22,9 @@ const els = {
   btnOpenDir: document.getElementById('btn-open-dir'),
   btnExtDir: document.getElementById('btn-ext-dir'),
   btnExtCopy: document.getElementById('btn-ext-copy'),
+  netDot: document.getElementById('net-dot'),
+  netStatusText: document.getElementById('net-status-text'),
+  btnNetCheck: document.getElementById('btn-net-check'),
   btnHome: document.getElementById('btn-home'),
   btnBack: document.getElementById('btn-back'),
   viewName: document.getElementById('view-name'),
@@ -964,6 +967,26 @@ els.btnExtCopy.addEventListener('click', async () => {
     btn.textContent = '复制扩展路径';
     btn.disabled = false;
   }, 1500);
+});
+
+// 网络检测：经主进程访问 Google 连通性端点（204），判断能否正常访问外网
+let netChecking = false;
+els.btnNetCheck.addEventListener('click', async () => {
+  if (netChecking) return;
+  netChecking = true;
+  els.btnNetCheck.disabled = true;
+  els.netDot.className = 'ext-dot off';
+  els.netStatusText.textContent = '检测中…';
+  const r = await api.checkNetwork().catch((e) => ({ ok: false, error: (e && e.message) || String(e) }));
+  if (r && r.ok) {
+    els.netStatusText.textContent = `外网连接正常（${r.latencyMs} ms）`;
+    els.netDot.className = 'ext-dot ok';
+  } else {
+    els.netStatusText.textContent = `无法访问外网（${(r && r.error) || '未知错误'}）`;
+    els.netDot.className = 'ext-dot err';
+  }
+  els.btnNetCheck.disabled = false;
+  netChecking = false;
 });
 
 // 记录 pointerdown 时视频的播放状态，以及视频最近一次播放/暂停切换的时刻，

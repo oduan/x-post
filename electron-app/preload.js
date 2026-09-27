@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld('xpost', {
   chooseDataDir: () => ipcRenderer.invoke('config:chooseDir'),
   openDataDir: () => ipcRenderer.invoke('data:openDir'),
   openExternal: (url) => ipcRenderer.invoke('sys:openExternal', url),
+  // 网络检测：访问 Google 连通性端点，{ok:true, latencyMs} | {ok:false, error}
+  checkNetwork: () => ipcRenderer.invoke('net:check'),
   // 浏览器扩展：连接状态（{connected, version, lastSeenAt, dir}）与安装引导辅助
   getExtensionStatus: () => ipcRenderer.invoke('extension:status'),
   openExtensionDir: () => ipcRenderer.invoke('extension:openDir'),

@@ -4,11 +4,14 @@
 const PORT = 24680;
 const BASE = `http://127.0.0.1:${PORT}`;
 
-// 点击工具栏图标：向当前页面注入内容脚本（幂等）并通知其抓取当前推文
+// 点击工具栏图标：向当前页面注入内容脚本（幂等）并通知其抓取当前推文/作品
 chrome.action.onClicked.addListener(async (tab) => {
   if (!tab || !tab.id) return;
   try {
-    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] });
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ['content.js', 'x.js', 'douyin.js'],
+    });
   } catch (e) {
     /* 无法注入的页面（如浏览器内部页）直接忽略 */
   }
@@ -53,9 +56,17 @@ function report(tabId, message) {
   }
 }
 
-// 流式下载，按 Content-Length 汇报进度；大小未知时 pct 为 null（不定进度）
+// 流式下载，按 Content-Length 汇报进度；大小未知时 pct 为 null（不定进度）。
+// 抖音的媒体直链（含 302 到 CDN）可能需要登录 Cookie，因此对 douyin 域名带上凭据
 async function downloadBlob(url, onPct) {
-  const resp = await fetch(url, { credentials: 'omit' });
+  let credentials = 'omit';
+  try {
+    // douyin.com / douyinvod.com / douyinpic.com 及其子域
+    if (/douyin(vod|pic)?\.com$/.test(new URL(url).hostname)) credentials = 'include';
+  } catch (e) {
+    /* ignore */
+  }
+  const resp = await fetch(url, { credentials });
   if (!resp.ok) throw new Error('下载失败 HTTP ' + resp.status);
   const contentType = resp.headers.get('content-type') || '';
   const total = Number(resp.headers.get('content-length') || 0);
@@ -82,7 +93,71 @@ async function downloadBlob(url, onPct) {
   return { blob: new Blob(chunks), contentType };
 }
 
-async function uploadMedia(tweetId, index, role, url, kind, blob, contentType) {
+// 下载 HLS（m3u8）并拼成单个 mp4：X 的部分视频（尤其受限推文）只有 HLS 流没有 mp4 直链。
+// fMP4/CMAF 分段（#EXT-X-MAP 初始化段 + .m4s/.mp4）按顺序拼接即为可播放的 mp4，无需转封装；
+// 老的 MPEG-TS 分段 Chromium 无法播放（需要 ffmpeg），直接放弃保留封面。
+async function downloadHls(plUrl, onPct) {
+  const fetchText = async (u) => {
+    const r = await fetch(u, { credentials: 'omit' });
+    if (!r.ok) throw new Error('播放列表下载失败 HTTP ' + r.status);
+    return r.text();
+  };
+
+  let text = await fetchText(plUrl);
+  // master 播放列表：取带宽最高的流
+  if (text.indexOf('#EXT-X-STREAM-INF') !== -1) {
+    const lines = text.split('\n');
+    let best = null;
+    let bestBr = -1;
+    for (let i = 0; i < lines.length; i++) {
+      if (!lines[i].startsWith('#EXT-X-STREAM-INF')) continue;
+      const br = Number((lines[i].match(/BANDWIDTH=(\d+)/) || [])[1] || 0);
+      const uri = (lines[i + 1] || '').trim();
+      if (uri && !uri.startsWith('#') && br > bestBr) {
+        bestBr = br;
+        best = uri;
+      }
+    }
+    if (!best) throw new Error('master 播放列表无可用流');
+    text = await fetchText(new URL(best, plUrl).toString());
+  }
+  if (/METHOD=(?!NONE)/.test(text)) throw new Error('加密 HLS 不支持');
+
+  const segs = text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith('#'));
+  if (!segs.length) throw new Error('播放列表为空');
+  const map = /#EXT-X-MAP:URI="([^"]+)"/.exec(text);
+  if (!map && !/\.(m4s|mp4)(\?|$)/.test(segs[0])) throw new Error('TS 分段不支持');
+
+  const fetchSeg = async (u) => {
+    for (let t = 0; ; t++) {
+      try {
+        const r = await fetch(u, { credentials: 'omit' });
+        if (!r.ok) throw new Error('分段下载失败 HTTP ' + r.status);
+        return await r.arrayBuffer();
+      } catch (e) {
+        if (t >= 1) throw e;
+        await new Promise((r2) => setTimeout(r2, 500)); // 失败重试一次
+      }
+    }
+  };
+
+  const parts = [];
+  let done = 0;
+  const totalSegs = segs.length + (map ? 1 : 0);
+  const push = (buf) => {
+    parts.push(buf);
+    done++;
+    onPct(done / totalSegs);
+  };
+  if (map) push(await fetchSeg(new URL(map[1], plUrl).toString()));
+  for (const s of segs) push(await fetchSeg(new URL(s, plUrl).toString()));
+  return { blob: new Blob(parts), contentType: 'video/mp4' };
+}
+
+async function uploadMedia(platform, rawId, index, role, url, kind, blob, contentType) {
   let ext = '';
   const m = /\.([a-z0-9]{2,5})(?:[?#]|$)/i.exec(url);
   if (m) ext = '.' + m[1].toLowerCase();
@@ -90,7 +165,8 @@ async function uploadMedia(tweetId, index, role, url, kind, blob, contentType) {
     method: 'POST',
     headers: {
       'Content-Type': contentType || (kind === 'video' ? 'video/mp4' : 'image/jpeg'),
-      'X-Tweet-Id': String(tweetId),
+      'X-Platform': platform,
+      'X-Tweet-Id': String(rawId),
       'X-Media-Index': String(index),
       'X-Media-Role': role,
       'X-Media-Ext': ext,
@@ -102,10 +178,13 @@ async function uploadMedia(tweetId, index, role, url, kind, blob, contentType) {
 
 async function saveFlow(payload, tabId) {
   const total = (payload.media || []).length;
+  const platform = payload.platform || 'x';
   try {
     // 先查重，避免重复下载大文件
     try {
-      const q = await fetch(`${BASE}/api/tweets/exists?id=${encodeURIComponent(payload.id)}`);
+      const q = await fetch(
+        `${BASE}/api/tweets/exists?id=${encodeURIComponent(payload.id)}&platform=${encodeURIComponent(platform)}`
+      );
       const j = await q.json();
       if (j && j.exists) {
         report(tabId, { type: 'XPOST_DONE', ok: true, duplicate: true });
@@ -125,9 +204,20 @@ async function saveFlow(payload, tabId) {
             report(tabId, { type: 'XPOST_PROGRESS', label: `正在下载${what} ${i}/${total}`, pct: p })
           );
           report(tabId, { type: 'XPOST_PROGRESS', label: `正在上传${what} ${i}/${total}`, pct: null });
-          await uploadMedia(payload.id, i, 'main', m.url, m.kind, blob, contentType);
+          await uploadMedia(platform, payload.id, i, 'main', m.url, m.kind, blob, contentType);
         } catch (e) {
           /* 下载/上传失败：保留 url，由应用端兜底下载 */
+        }
+      } else if (m.kind === 'video' && m.hlsUrl) {
+        // 只有 HLS 流：按播放列表拼成 mp4 再上传；失败保留封面（卡片标注原因）
+        try {
+          const { blob } = await downloadHls(m.hlsUrl, (p) =>
+            report(tabId, { type: 'XPOST_PROGRESS', label: `正在下载视频(HLS) ${i}/${total}`, pct: p })
+          );
+          report(tabId, { type: 'XPOST_PROGRESS', label: `正在上传视频 ${i}/${total}`, pct: null });
+          await uploadMedia(platform, payload.id, i, 'main', m.hlsUrl, 'video', blob, 'video/mp4');
+        } catch (e) {
+          /* HLS 拼接失败 */
         }
       }
       if (m.poster) {
@@ -136,7 +226,7 @@ async function saveFlow(payload, tabId) {
             report(tabId, { type: 'XPOST_PROGRESS', label: `正在下载视频封面 ${i}/${total}`, pct: p })
           );
           report(tabId, { type: 'XPOST_PROGRESS', label: `正在上传视频封面 ${i}/${total}`, pct: null });
-          await uploadMedia(payload.id, i, 'poster', m.poster, 'image', blob, contentType);
+          await uploadMedia(platform, payload.id, i, 'poster', m.poster, 'image', blob, contentType);
         } catch (e) {
           /* 封面失败可由应用端兜底 */
         }

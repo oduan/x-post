@@ -33,7 +33,7 @@ const els = {
   lbClose: document.getElementById('lb-close'),
 };
 
-let view = { type: 'timeline' }; // 当前视图：{type:'timeline'} 或 {type:'user', userId, userName}
+let view = { type: 'timeline' }; // 当前视图：{type:'timeline'} 或 {type:'user', platform, userId, userName}
 const carouselState = new Map(); // tweetId -> 卡片内轮播当前下标
 
 // ---------- 视图状态（分页缓存） ----------
@@ -44,8 +44,13 @@ const viewStates = new Map(); // viewKey -> state
 let active = null; // 当前展示中的视图状态
 let activeSeq = 0; // 每次切换视图/刷新递增，用于丢弃过期的异步渲染
 
+// 作者视图缓存键按「平台 + 稳定作者键」区分：作者改名/改抖音号不会拆分视图
+function userCacheKey(platform, authorKey) {
+  return 'user:' + (platform || 'x') + ':' + authorKey;
+}
+
 function viewKey(v) {
-  return v && v.type === 'user' ? 'user:' + v.userId : 'timeline';
+  return v && v.type === 'user' ? userCacheKey(v.platform, v.authorKey) : 'timeline';
 }
 
 function getState(v) {
@@ -53,7 +58,13 @@ function getState(v) {
   let s = viewStates.get(k);
   if (!s) {
     s = {
-      view: { type: v.type === 'user' ? 'user' : 'timeline', userId: v.userId, userName: v.userName },
+      view: {
+        type: v.type === 'user' ? 'user' : 'timeline',
+        platform: v.platform || 'x',
+        authorKey: v.authorKey || v.userId,
+        userId: v.userId,
+        userName: v.userName,
+      },
       items: [], // 已加载推文（含 _keys 排序键）
       byId: new Map(),
       nextCursor: null,
@@ -121,7 +132,7 @@ function setView(v) {
 function renderViewTitle() {
   if (view.type === 'user') {
     els.btnBack.hidden = false;
-    els.viewName.textContent = view.userName ? `${view.userName}（@${view.userId}）` : `@${view.userId}`;
+    els.viewName.textContent = view.userName ? `${view.userName}（@${shortId(view.userId)}）` : `@${shortId(view.userId)}`;
   } else {
     els.btnBack.hidden = true;
     els.viewName.textContent = ''; // 应用名已由左侧图标代替
@@ -130,9 +141,27 @@ function renderViewTitle() {
 
 // ---------- 卡片渲染 ----------
 
+// 来源平台：X 保持原样不加标记（历史界面不变），其它平台在昵称旁显示来源徽标
+const PLATFORM_LABELS = { douyin: '抖音' };
+
+// 长 ID 截断显示（如抖音作者没设抖音号时的 sec_uid，60 多个字符）。
+// 只影响显示：存储、作者视图分组、跳转用的都是完整 ID
+function shortId(s) {
+  s = String(s || '');
+  return s.length > 18 ? s.slice(0, 10) + '…' + s.slice(-6) : s;
+}
+
+function platformBadgeHtml(t) {
+  const p = t.platform || 'x';
+  if (p === 'x') return '';
+  return `<span class="platform-badge">${esc(PLATFORM_LABELS[p] || p)}</span>`;
+}
+
 function userAttrs(t) {
   return t.userId
-    ? ` data-user-id="${esc(t.userId)}" data-user-name="${esc(t.userName || '')}"`
+    ? ` data-user-id="${esc(t.userId)}" data-user-platform="${esc(t.platform || 'x')}" data-author-key="${esc(
+        t.authorKey || t.userId
+      )}" data-user-name="${esc(t.userName || '')}"`
     : '';
 }
 
@@ -161,9 +190,10 @@ function mediaItemHtml(m, idx) {
     );
   }
   if (poster) {
+    const note = m.missReason || '未捕获到视频直链，已保存封面';
     return (
       `<div class="media-item media-video"${dataIdx}><img src="${esc(poster)}" alt="" loading="lazy">` +
-      '<div class="video-play"><span>▶</span></div><span class="miss-note">未捕获到视频直链，已保存封面</span></div>'
+      `<div class="video-play"><span>▶</span></div><span class="miss-note">${esc(note)}</span></div>`
     );
   }
   return '';
@@ -199,9 +229,11 @@ function mediaHtml(t) {
 function quoteHtml(t) {
   const q = t.quotedTweet;
   if (!q || (!q.userName && !q.content)) return '';
-  const nameAttrs = q.userId ? ` class="quote-name user-link"${userAttrs(q)}` : ' class="quote-name"';
+  // 引用推文与主推文同源平台（作者链接跳转需要）
+  const qWithPlatform = { ...q, platform: t.platform };
+  const nameAttrs = q.userId ? ` class="quote-name user-link"${userAttrs(qWithPlatform)}` : ' class="quote-name"';
   const head = `<div class="quote-head"><span${nameAttrs}>${esc(q.userName || '')}</span>${
-    q.userId ? `<span class="quote-handle user-link"${userAttrs(q)}>@${esc(q.userId)}</span>` : ''
+    q.userId ? `<span class="quote-handle user-link"${userAttrs(qWithPlatform)}>@${esc(shortId(q.userId))}</span>` : ''
   }</div>`;
   const body = q.content ? `<div class="quote-text">${esc(q.content)}</div>` : '';
   return `<div class="quote">${head}${body}</div>`;
@@ -215,7 +247,8 @@ function tweetHtml(t) {
     <div class="tweet-body">
       <div class="tweet-head">
         <span class="tweet-name${t.userId ? ' user-link' : ''}"${userAttrs(t)}>${esc(t.userName || '未知用户')}</span>
-        ${t.userId ? `<span class="tweet-handle user-link"${userAttrs(t)}>@${esc(t.userId)}</span>` : ''}
+        ${platformBadgeHtml(t)}
+        ${t.userId ? `<span class="tweet-handle user-link"${userAttrs(t)} title="${esc(t.userId)}">@${esc(shortId(t.userId))}</span>` : ''}
         <span class="dot">·</span>
         <span class="tweet-time" title="${esc(abs(timeIso))}">${esc(rel(timeIso))}</span>
         <button class="more-btn" data-id="${esc(t.id)}" title="更多选项">⋯</button>
@@ -356,7 +389,8 @@ async function loadPage(s, seq) {
   try {
     const resp = await api.pageTweets({
       view: s.view.type,
-      userId: s.view.type === 'user' ? s.view.userId : undefined,
+      platform: s.view.type === 'user' ? s.view.platform : undefined,
+      authorKey: s.view.type === 'user' ? s.view.authorKey : undefined,
       cursor: s.nextCursor,
       limit: PAGE_SIZE,
     });
@@ -434,7 +468,7 @@ function applyUpsert(t) {
   if (!t || !t.id || !t._keys) return;
   upsertInto(viewStates.get('timeline'), t, 'timeline'); // 时间线缓存始终维护
   if (t.userId) {
-    const us = viewStates.get('user:' + t.userId);
+    const us = viewStates.get(userCacheKey(t.platform, t.authorKey || t.userId));
     if (us) upsertInto(us, t, 'user');
   }
 }
@@ -841,8 +875,10 @@ function openTweetMenu(btn, id) {
     return b;
   };
 
-  if (t && t.url) addItem('打开原推文', '', () => { closeMenu(); api.openExternal(t.url); });
-  if (t) addItem(`保存于 ${abs(t.savedAt)}`, 'info');
+  if (t && t.url) {
+    const isX = (t.platform || 'x') === 'x';
+    addItem(isX ? '打开原推文' : '打开原内容', '', () => { closeMenu(); api.openExternal(t.url); });
+  }
 
   if (menuEl.children.length) {
     const sep = document.createElement('div');
@@ -861,6 +897,9 @@ function openTweetMenu(btn, id) {
     // 增量 delete 事件会移除卡片；这里兜底立即移除
     if (active && active.byId.has(id)) applyDelete(id);
   });
+
+  // 保存时间作为页脚信息放最后，不与操作项混排
+  if (t) addItem(`保存于 ${abs(t.savedAt)}`, 'info');
 
   document.body.appendChild(menuEl);
 
@@ -1015,7 +1054,13 @@ els.timeline.addEventListener('click', (e) => {
 
   const userLink = target.closest('.user-link');
   if (userLink && userLink.dataset.userId) {
-    setView({ type: 'user', userId: userLink.dataset.userId, userName: userLink.dataset.userName || '' });
+    setView({
+      type: 'user',
+      platform: userLink.dataset.userPlatform || 'x',
+      authorKey: userLink.dataset.authorKey || userLink.dataset.userId,
+      userId: userLink.dataset.userId,
+      userName: userLink.dataset.userName || '',
+    });
   }
 });
 

@@ -2,3 +2,5 @@ node_modules/
 *.log
 smoke.log
 electron-app/release/
+.zcode/
+tools/test-store-done.json

@@ -163,6 +163,17 @@ main { max-width: 620px; margin: 0 auto; }
 .tweet-name { font-weight: 700; }
 .tweet-handle, .dot, .tweet-time { color: var(--muted); }
 
+/* 非 X 平台（抖音等）的来源徽标 */
+.platform-badge {
+  font-size: 11px;
+  line-height: 1;
+  color: #536471;
+  border: 1px solid #cfd9de;
+  border-radius: 9999px;
+  padding: 3px 7px;
+  white-space: nowrap;
+}
+
 .tweet-title { font-weight: 700; font-size: 17px; margin-top: 6px; }
 .tweet-text { margin-top: 4px; white-space: pre-wrap; word-break: break-word; }
 

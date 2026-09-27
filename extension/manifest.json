@@ -1,10 +1,16 @@
 {
   "manifest_version": 3,
-  "name": "X-Post · 推文保存",
-  "version": "0.1.5",
-  "description": "在 X(Twitter) 推文详情页一键保存推文（用户名、ID、正文、图片、视频）到本地 X-Post 桌面应用。",
+  "name": "X-Post · 推文/作品保存",
+  "version": "0.1.6",
+  "description": "在 X(Twitter) 推文详情页或抖音作品详情页一键保存内容（作者、正文、图片、视频）到本地 X-Post 桌面应用。",
   "permissions": ["activeTab", "scripting", "alarms"],
-  "host_permissions": ["http://127.0.0.1:24680/*", "https://*.twimg.com/*"],
+  "host_permissions": [
+    "http://127.0.0.1:24680/*",
+    "https://*.twimg.com/*",
+    "https://*.douyin.com/*",
+    "https://*.douyinvod.com/*",
+    "https://*.douyinpic.com/*"
+  ],
   "background": {
     "service_worker": "background.js"
   },
@@ -16,13 +22,19 @@
       "world": "MAIN"
     },
     {
-      "matches": ["https://x.com/*", "https://twitter.com/*"],
-      "js": ["content.js"],
+      "matches": ["https://*.douyin.com/*"],
+      "js": ["inject-douyin.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://x.com/*", "https://twitter.com/*", "https://*.douyin.com/*"],
+      "js": ["content.js", "x.js", "douyin.js"],
       "run_at": "document_idle"
     }
   ],
   "action": {
-    "default_title": "保存这条推文到 X-Post"
+    "default_title": "保存这条推文/作品到 X-Post"
   },
   "icons": {
     "16": "icons/icon16.png",

@@ -45,6 +45,18 @@ function str(v) {
   return typeof v === 'string' ? v : '';
 }
 
+// 平台标识（x / douyin / …），与扩展约定：不传视为 'x'
+const RE_PLATFORM = /^[a-z][a-z0-9]{0,31}$/;
+const RE_RAW_ID = /^[A-Za-z0-9._-]{1,128}$/;
+
+// 由平台 + 平台原始 ID 组合出记录主键；非法返回 null
+function composeRid(platform, rawId) {
+  platform = str(platform) || 'x';
+  rawId = str(rawId);
+  if (!RE_PLATFORM.test(platform) || !RE_RAW_ID.test(rawId)) return null;
+  return platform + ':' + rawId;
+}
+
 // 扩展心跳：扩展每分钟 ping 一次 /api/ping（带 X-Extension-Version 头），
 // 记录最近一次的版本与时间，供设置面板显示「扩展已连接」。
 // TTL 取 5 分钟：告警周期 1 分钟，容忍浏览器休眠/MV3 worker 节流造成的偶发缺口
@@ -83,22 +95,23 @@ function startServer(port, onSaveTweet, onUploadMedia, existsTweet, appVersion) 
         return;
       }
       if (req.method === 'GET' && url === '/api/tweets/exists') {
-        const id = str(new URL(req.url, 'http://x').searchParams.get('id') || '');
-        const found = typeof existsTweet === 'function' ? await existsTweet(id) : false;
+        const sp = new URL(req.url, 'http://x').searchParams;
+        const rid = composeRid(sp.get('platform'), sp.get('id'));
+        const found = rid && typeof existsTweet === 'function' ? await existsTweet(rid) : false;
         sendJson(res, 200, { ok: true, exists: !!found });
         return;
       }
       if (req.method === 'POST' && url === '/api/media') {
-        const id = str(req.headers['x-tweet-id']);
+        const rid = composeRid(req.headers['x-platform'], req.headers['x-tweet-id']);
         const index = parseInt(req.headers['x-media-index'], 10);
         const role = str(req.headers['x-media-role']) || 'main';
         const ext = str(req.headers['x-media-ext']);
-        if (!/^\d{5,25}$/.test(id) || !(index >= 0 && index <= 19) || ['main', 'poster'].indexOf(role) === -1) {
+        if (!rid || !(index >= 0 && index <= 19) || ['main', 'poster'].indexOf(role) === -1) {
           sendJson(res, 400, { ok: false, error: '无效的媒体上传请求' });
           return;
         }
         try {
-          await onUploadMedia({ id, index, role, ext, contentType: str(req.headers['content-type']), stream: req });
+          await onUploadMedia({ id: rid, index, role, ext, contentType: str(req.headers['content-type']), stream: req });
           sendJson(res, 200, { ok: true });
         } catch (e) {
           sendJson(res, 500, { ok: false, error: (e && e.message) ? e.message : String(e) });

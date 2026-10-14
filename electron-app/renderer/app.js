@@ -766,6 +766,7 @@ function lbRender() {
   const t = lb.tweet;
   if (!t || !t.media || !t.media.length) return closeLightbox();
   const m = t.media[lb.index];
+  lbZoomReset(); // 切换媒体时还原缩放/平移
   if (m.kind === 'image') {
     const src = m.localUrl || m.url;
     els.lbMedia.innerHTML = src ? `<img src="${esc(src)}" alt="">` : '';
@@ -827,17 +828,131 @@ els.lbNext.addEventListener('click', (e) => {
 });
 els.lbClose.addEventListener('click', closeLightbox);
 els.lightbox.addEventListener('click', (e) => {
+  if (lbDragAteClick) {
+    lbDragAteClick = false; // 刚拖动平移过，松手产生的 click 不关闭
+    return;
+  }
   if (e.target === els.lightbox) closeLightbox();
 });
 
-// 查看器打开时禁用了页面滚动：滚轮/触控板上下滚动改为在该推文的媒体间切换
+// ---------- 查看器图片缩放/平移 ----------
+// Ctrl+滚轮：以光标为锚点缩放；放大后（scale>1）鼠标拖动或滚轮平移；
+// 未放大时滚轮维持原有的「切换媒体」行为（见下方 wheel 监听）。
+// 仅图片支持，视频保持原生控件不受影响。
+
+const lbZoom = { scale: 1, x: 0, y: 0 };
+const LB_ZOOM_MAX = 8;
+
+function lbZoomReset() {
+  lbZoom.scale = 1;
+  lbZoom.x = 0;
+  lbZoom.y = 0;
+}
+
+function lbZoomCurrentImg() {
+  // 仅图片可缩放；视频/无媒体时返回 null
+  return lb.tweet && lb.tweet.media[lb.index] && lb.tweet.media[lb.index].kind === 'image'
+    ? els.lbMedia.querySelector('img')
+    : null;
+}
+
+// 平移夹取：拖动范围不超过缩放新增的尺寸的一半，图片不会被拖出可视区域
+function lbZoomClamp() {
+  const img = els.lbMedia.querySelector('img');
+  if (!img || lbZoom.scale <= 1) {
+    lbZoom.x = 0;
+    lbZoom.y = 0;
+    return;
+  }
+  const mx = Math.max(0, (img.offsetWidth * (lbZoom.scale - 1)) / 2);
+  const my = Math.max(0, (img.offsetHeight * (lbZoom.scale - 1)) / 2);
+  lbZoom.x = Math.max(-mx, Math.min(mx, lbZoom.x));
+  lbZoom.y = Math.max(-my, Math.min(my, lbZoom.y));
+}
+
+function lbZoomApply() {
+  const img = els.lbMedia.querySelector('img');
+  if (!img) return;
+  img.style.transform = `translate(${lbZoom.x}px, ${lbZoom.y}px) scale(${lbZoom.scale})`;
+  img.style.cursor = lbZoom.scale > 1 ? 'grab' : '';
+}
+
+// 缩放到 s1，锚点 (cx, cy) 为光标相对窗口中心（=图片中心）的偏移，
+// 保证光标下的图像内容在缩放前后保持不动
+function lbZoomAt(s1, cx, cy) {
+  const img = lbZoomCurrentImg();
+  if (!img) return;
+  const s0 = lbZoom.scale;
+  s1 = Math.min(LB_ZOOM_MAX, Math.max(1, s1));
+  if (s1 === s0) return;
+  const k = s1 / s0;
+  lbZoom.x = cx - k * (cx - lbZoom.x);
+  lbZoom.y = cy - k * (cy - lbZoom.y);
+  lbZoom.scale = s1;
+  lbZoomClamp();
+  lbZoomApply();
+}
+
+// 拖动平移（按住左键）；拖动过则吞掉随后的 click，避免松手时误关查看器
+let lbDrag = null;
+let lbDragAteClick = false;
+
+els.lightbox.addEventListener('mousedown', (e) => {
+  if (e.button !== 0 || lbZoom.scale <= 1 || !lbZoomCurrentImg()) return;
+  if (e.target.closest('button, video')) return;
+  e.preventDefault(); // 阻止图片原生拖拽与文字选中
+  lbDrag = { x: e.clientX, y: e.clientY, bx: lbZoom.x, by: lbZoom.y, moved: false };
+  els.lightbox.style.cursor = 'grabbing';
+  lbZoomCurrentImg().style.cursor = 'grabbing';
+});
+window.addEventListener('mousemove', (e) => {
+  if (!lbDrag) return;
+  const dx = e.clientX - lbDrag.x;
+  const dy = e.clientY - lbDrag.y;
+  if (!lbDrag.moved && Math.abs(dx) + Math.abs(dy) > 3) lbDrag.moved = true;
+  lbZoom.x = lbDrag.bx + dx;
+  lbZoom.y = lbDrag.by + dy;
+  lbZoomClamp();
+  lbZoomApply();
+});
+window.addEventListener('mouseup', () => {
+  if (!lbDrag) return;
+  lbDragAteClick = lbDrag.moved;
+  lbDrag = null;
+  els.lightbox.style.cursor = '';
+  lbZoomApply(); // 恢复图片上的 grab 光标
+});
+
+// 双击图片：在「适合窗口」与放大 2.5 倍（以双击处为锚点）之间切换
+els.lbMedia.addEventListener('dblclick', (e) => {
+  if (!lbZoomCurrentImg()) return;
+  const cx = e.clientX - window.innerWidth / 2;
+  const cy = e.clientY - window.innerHeight / 2;
+  lbZoomAt(lbZoom.scale > 1 ? 1 : 2.5, lbZoom.scale > 1 ? 0 : cx, lbZoom.scale > 1 ? 0 : cy);
+});
+
+// 查看器打开时禁用了页面滚动：Ctrl+滚轮缩放图片；放大后滚轮平移图片；
+// 未放大时滚轮/触控板上下滚动改为在该推文的媒体间切换
 let lbWheelAcc = 0;
 let lbWheelReset = null;
 els.lightbox.addEventListener(
   'wheel',
   (e) => {
     e.preventDefault();
-    if (!lb.tweet || !lb.tweet.media || lb.tweet.media.length <= 1) return;
+    if (!lb.tweet) return;
+    if ((e.ctrlKey || e.metaKey) && lbZoomCurrentImg()) {
+      lbZoomAt(lbZoom.scale * Math.exp(-e.deltaY * 0.002), e.clientX - window.innerWidth / 2, e.clientY - window.innerHeight / 2);
+      return;
+    }
+    if (lbZoom.scale > 1 && lbZoomCurrentImg()) {
+      // 已放大：滚轮平移（Shift+滚轮/触控板横向滚动走 deltaX）
+      lbZoom.x -= e.deltaX;
+      lbZoom.y -= e.deltaY;
+      lbZoomClamp();
+      lbZoomApply();
+      return;
+    }
+    if (!lb.tweet.media || lb.tweet.media.length <= 1) return;
     lbWheelAcc += e.deltaY;
     clearTimeout(lbWheelReset);
     lbWheelReset = setTimeout(() => {
